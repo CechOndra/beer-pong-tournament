@@ -16,6 +16,8 @@ function App() {
   const [currentMatchIndex, setCurrentMatchIndex] = useState(null); // { roundIndex, matchIndex } or { groupIndex, matchIndex } or { type: 'thirdPlace' }
   const [winner, setWinner] = useState(null);
   const [thirdPlaceMatch, setThirdPlaceMatch] = useState(null); // { p1, p2, winner }
+  const [playoffGameTime, setPlayoffGameTime] = useState(600); // Seconds
+  const [tempPlayoffTime, setTempPlayoffTime] = useState(10); // Minutes (for UI)
 
   // --- Navigation & Setup ---
 
@@ -30,6 +32,7 @@ function App() {
     if (mode === 'groups') {
       generateGroups(teams, config.numGroups, config.advancingPerGroup);
     } else {
+      setPlayoffGameTime(config.gameTime); // Set playoff time directly
       generateBracket(teams);
     }
   };
@@ -166,7 +169,14 @@ function App() {
     setGroups(newGroups);
   };
 
+  const goToPlayoffSetup = () => {
+    setView('playoffSetup');
+  };
+
   const advanceToBracket = () => {
+    // Set the chosen time
+    setPlayoffGameTime(tempPlayoffTime * 60);
+
     // Seed teams from groups
     // Assumption: 2 groups, 2 advancing.
     // A1 vs B2, B1 vs A2.
@@ -391,8 +401,49 @@ function App() {
             <GroupStage
               groups={groups}
               onMatchClick={handleGroupMatchClick}
-              onAdvanceToPlayoffs={advanceToBracket}
+              onAdvanceToPlayoffs={goToPlayoffSetup}
             />
+          </motion.div>
+        )}
+
+        {view === 'playoffSetup' && (
+          <motion.div
+            key="playoffSetup"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.1 }}
+            className="w-full max-w-2xl mx-auto flex flex-col gap-8 animate-fade-in"
+          >
+            <h2 className="text-3xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
+              Playoff Configuration
+            </h2>
+            <div className="bg-white/5 p-6 rounded-2xl border border-white/10">
+              <label className="block text-lg font-semibold mb-4">
+                Playoff Game Duration
+              </label>
+              <div className="flex items-center gap-4">
+                <input
+                  type="range"
+                  min="1"
+                  max="20"
+                  value={tempPlayoffTime}
+                  onChange={(e) => setTempPlayoffTime(parseInt(e.target.value))}
+                  className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                />
+                <div className="min-w-[80px] text-center font-mono text-xl font-bold text-blue-400">
+                  {tempPlayoffTime} min
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                Set the time limit for all playoff matches.
+              </p>
+            </div>
+            <button
+              onClick={advanceToBracket}
+              className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl font-bold text-xl shadow-lg hover:scale-[1.02] transition-transform"
+            >
+              Generate Bracket
+            </button>
           </motion.div>
         )}
 
@@ -458,6 +509,11 @@ function App() {
                     : matches[currentMatchIndex.roundIndex][currentMatchIndex.matchIndex].p2
               }
               onGameEnd={handleGameEnd}
+              initialTime={
+                currentMatchIndex.type === 'group'
+                  ? tournamentConfig?.gameTime || 600
+                  : playoffGameTime
+              }
             />
           </motion.div>
         )}

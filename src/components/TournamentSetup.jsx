@@ -6,6 +6,8 @@ const TournamentSetup = ({ teams, onStartTournament }) => {
     const [numGroups, setNumGroups] = useState(2);
     const [advancingPerGroup, setAdvancingPerGroup] = useState(2);
 
+    const [gameTime, setGameTime] = useState(10); // Minutes
+
     // Calculate valid options based on team count
     const maxGroups = Math.floor(teams.length / 3); // Min 3 teams per group usually
     const validGroupOptions = [];
@@ -26,7 +28,10 @@ const TournamentSetup = ({ teams, onStartTournament }) => {
     const handleStart = () => {
         onStartTournament({
             mode,
-            config: mode === 'groups' ? { numGroups, advancingPerGroup } : null
+            config: {
+                ...(mode === 'groups' ? { numGroups, advancingPerGroup } : {}),
+                gameTime: gameTime * 60 // Convert to seconds
+            }
         });
     };
 
@@ -63,6 +68,29 @@ const TournamentSetup = ({ teams, onStartTournament }) => {
                         {teams.length < 6 && <div className="text-xs font-normal mt-1 text-gray-400">(Min 6 teams)</div>}
                     </button>
                 </div>
+            </div>
+
+            {/* Game Time Configuration */}
+            <div className="bg-white/5 p-6 rounded-2xl border border-white/10">
+                <label className="block text-lg font-semibold mb-4">
+                    {mode === 'groups' ? 'Group Stage Game Duration' : 'Game Duration'}
+                </label>
+                <div className="flex items-center gap-4">
+                    <input
+                        type="range"
+                        min="1"
+                        max="20"
+                        value={gameTime}
+                        onChange={(e) => setGameTime(parseInt(e.target.value))}
+                        className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                    <div className="min-w-[80px] text-center font-mono text-xl font-bold text-blue-400">
+                        {gameTime} min
+                    </div>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                    Time limit for each game. {mode === 'groups' && 'Playoff time can be set later.'}
+                </p>
             </div>
 
             {mode === 'groups' && (

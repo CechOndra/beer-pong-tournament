@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import Cup from './Cup';
 import { motion } from 'framer-motion';
 
-const GameScreen = ({ team1, team2, onGameEnd }) => {
+const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
     // True means cup is standing, False means cup is hit/removed
     const [cups1, setCups1] = useState(Array(6).fill(true));
     const [cups2, setCups2] = useState(Array(6).fill(true));
-    const [timeLeft, setTimeLeft] = useState(600); // 10 minutes
+    const [timeLeft, setTimeLeft] = useState(initialTime);
     const [isActive, setIsActive] = useState(false);
     const [suddenDeath, setSuddenDeath] = useState(false);
     const [streak1, setStreak1] = useState(0); // Consecutive hits for team 1
