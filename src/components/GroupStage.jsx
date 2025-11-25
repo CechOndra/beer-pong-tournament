@@ -145,33 +145,49 @@ const GroupStage = ({ groups, onMatchClick, onAdvanceToPlayoffs, mode }) => {
                 >
                     <h3 className="text-2xl font-bold mb-2 text-purple-300">Matches</h3>
                     <div className="flex flex-col gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                        {groups[activeTab].matches.map((match, i) => (
-                            <div
-                                key={match.id}
-                                onClick={() => !match.winner && onMatchClick(activeTab, i)}
-                                className={`p-4 rounded-xl border transition-all relative ${match.winner
-                                    ? 'bg-black/20 border-white/5 opacity-70'
-                                    : 'bg-white/10 border-white/20 cursor-pointer hover:bg-white/15 hover:scale-[1.02]'
-                                    }`}
-                            >
-                                <div className="flex justify-between items-center">
-                                    <span className={`font-bold ${match.winner === match.p1 ? 'text-green-400' : 'text-white'}`}>
-                                        {match.p1}
-                                    </span>
-                                    <span className="text-xs text-gray-500 font-mono">VS</span>
-                                    <span className={`font-bold ${match.winner === match.p2 ? 'text-green-400' : 'text-white'}`}>
-                                        {match.p2}
-                                    </span>
-                                </div>
-                                {match.winner && (
-                                    <div className="mt-2 text-xs text-center text-gray-400 border-t border-white/5 pt-2 flex justify-center gap-4">
-                                        <span>Winner: {match.winner}</span>
-                                        {match.winType === 'shooter' && <span className="text-purple-400">SHOOTER WIN</span>}
-                                        {match.winType === 'ot' && <span className="text-yellow-400">OT WIN</span>}
+                        {groups[activeTab].matches.map((match, i) => {
+                            // Calculate cups hit (6 - remaining)
+                            const p1CupsHit = match.stats ? 6 - match.stats[match.p1 === match.winner ? 'winner' : 'loser'] : 0;
+                            const p2CupsHit = match.stats ? 6 - match.stats[match.p2 === match.winner ? 'winner' : 'loser'] : 0;
+
+                            return (
+                                <div
+                                    key={match.id}
+                                    onClick={() => !match.winner && onMatchClick(activeTab, i)}
+                                    className={`p-4 rounded-xl border transition-all relative ${match.winner
+                                        ? 'bg-black/20 border-white/5 opacity-70'
+                                        : 'bg-white/10 border-white/20 cursor-pointer hover:bg-white/15 hover:scale-[1.02]'
+                                        }`}
+                                >
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex flex-col items-center">
+                                            <span className={`font-bold ${match.winner === match.p1 ? 'text-green-400' : 'text-white'}`}>
+                                                {match.p1}
+                                            </span>
+                                            {match.winner && (
+                                                <span className="text-xs text-gray-400 mt-1">Cups hit: {p1CupsHit}</span>
+                                            )}
+                                        </div>
+                                        <span className="text-xs text-gray-500 font-mono">VS</span>
+                                        <div className="flex flex-col items-center">
+                                            <span className={`font-bold ${match.winner === match.p2 ? 'text-green-400' : 'text-white'}`}>
+                                                {match.p2}
+                                            </span>
+                                            {match.winner && (
+                                                <span className="text-xs text-gray-400 mt-1">Cups hit: {p2CupsHit}</span>
+                                            )}
+                                        </div>
                                     </div>
-                                )}
-                            </div>
-                        ))}
+                                    {match.winner && (
+                                        <div className="mt-2 text-xs text-center text-gray-400 border-t border-white/5 pt-2 flex justify-center gap-4">
+                                            <span>Winner: {match.winner} ({match.winner === match.p1 ? p1CupsHit : p2CupsHit}-{match.winner === match.p1 ? p2CupsHit : p1CupsHit})</span>
+                                            {match.winType === 'shooter' && <span className="text-purple-400">SHOOTER WIN</span>}
+                                            {match.winType === 'ot' && <span className="text-yellow-400">OT WIN</span>}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </motion.div>
             </div>
