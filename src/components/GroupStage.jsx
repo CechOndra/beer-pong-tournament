@@ -146,9 +146,9 @@ const GroupStage = ({ groups, onMatchClick, onAdvanceToPlayoffs, mode }) => {
                     <h3 className="text-2xl font-bold mb-2 text-purple-300">Matches</h3>
                     <div className="flex flex-col gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                         {groups[activeTab].matches.map((match, i) => {
-                            // Calculate cups hit (6 - remaining)
-                            const p1CupsHit = match.stats ? 6 - match.stats[match.p1 === match.winner ? 'winner' : 'loser'] : 0;
-                            const p2CupsHit = match.stats ? 6 - match.stats[match.p2 === match.winner ? 'winner' : 'loser'] : 0;
+                            // Calculate cups hit (6 - opponent's remaining)
+                            const p1CupsHit = match.stats ? 6 - match.stats[match.p1 === match.winner ? 'loser' : 'winner'] : 0;
+                            const p2CupsHit = match.stats ? 6 - match.stats[match.p2 === match.winner ? 'loser' : 'winner'] : 0;
 
                             return (
                                 <div
