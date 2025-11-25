@@ -51,7 +51,7 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
 
             if (suddenDeath && !newCups[index]) {
                 // Cup removed in sudden death -> Team 2 wins
-                setTimeout(() => handleGameEnd(team2, 'ot'), 500);
+                setTimeout(() => handleGameEnd(team2, 'ot', newCups, cups2), 500);
             } else {
                 checkWinner(newCups, cups2);
             }
@@ -69,7 +69,7 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
 
             if (suddenDeath && !newCups[index]) {
                 // Cup removed in sudden death -> Team 1 wins
-                setTimeout(() => handleGameEnd(team1, 'ot'), 500);
+                setTimeout(() => handleGameEnd(team1, 'ot', cups1, newCups), 500);
             } else {
                 checkWinner(cups1, newCups);
             }
@@ -79,17 +79,17 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
     const checkWinner = (c1, c2) => {
         // If Team 1 loses all cups, Team 2 wins
         if (c1.every(c => !c)) {
-            setTimeout(() => handleGameEnd(team2, 'regular'), 500);
+            setTimeout(() => handleGameEnd(team2, 'shooter', c1, c2), 500);
         }
         // If Team 2 loses all cups, Team 1 wins
         if (c2.every(c => !c)) {
-            setTimeout(() => handleGameEnd(team1, 'regular'), 500);
+            setTimeout(() => handleGameEnd(team1, 'shooter', c1, c2), 500);
         }
     };
 
-    const handleGameEnd = (winnerName, type = 'regular') => {
-        const remaining1 = cups1.filter(c => c).length;
-        const remaining2 = cups2.filter(c => c).length;
+    const handleGameEnd = (winnerName, type = 'regular', finalCups1 = cups1, finalCups2 = cups2) => {
+        const remaining1 = finalCups1.filter(c => c).length;
+        const remaining2 = finalCups2.filter(c => c).length;
 
         // Determine actual winner if not passed explicitly (e.g. from timer end)
         let actualWinner = winnerName;

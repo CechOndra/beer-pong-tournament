@@ -29,7 +29,7 @@ function App() {
   const startTournament = ({ mode, config }) => {
     setTournamentConfig({ mode, ...config });
 
-    if (mode === 'groups') {
+    if (mode === 'groups' || mode === 'groups_only') {
       generateGroups(teams, config.numGroups, config.advancingPerGroup);
     } else {
       setPlayoffGameTime(config.gameTime); // Set playoff time directly
@@ -66,10 +66,14 @@ function App() {
       group.standings = group.teams.map(team => ({
         name: team,
         points: 0,
-        wins: 0,
-        losses: 0,
+        wins: 0, // Regular Wins (including Shooter Wins)
+        otWins: 0,
+        otLosses: 0,
+        losses: 0, // Regular Losses
         shooterWins: 0,
         cupDiff: 0,
+        cupsHit: 0,
+        cupsLost: 0,
         gamesPlayed: 0
       }));
 
@@ -110,60 +114,72 @@ function App() {
     // Update Stats
     winnerStats.gamesPlayed++;
     loserStats.gamesPlayed++;
-    winnerStats.wins++;
-    loserStats.losses++;
 
     // Points Logic
-    // Shooter Win (3pts), OT Win (2pts), OT Loss (1pt), Regular Loss (0pts)
+    // Shooter Win: 3pts, +1 W, +1 SW
+    // Regular Win: 3pts, +1 W
+    // OT Win: 2pts, +1 OTW
+    // OT Loss: 1pt, +1 OTL
+    // Regular Loss: 0pts, +1 L
+
     if (winType === 'shooter') {
       winnerStats.points += 3;
+      winnerStats.wins++;
       winnerStats.shooterWins++;
+      loserStats.losses++;
     } else if (winType === 'ot') {
       winnerStats.points += 2;
+      winnerStats.otWins++;
       loserStats.points += 1;
+      loserStats.otLosses++;
     } else {
-      // Regular win
-      winnerStats.points += 3; // Wait, user said "Win before timer... is 3 pts". Regular win is usually 3 pts?
-      // User said: "Win before timer ran out... is worth 3 points... and is also a so called 'shooters win'"
-      // This implies a normal win (cups cleared) IS a shooter win.
-      // But what if timer runs out and I have more cups? That's a win, but NOT a shooter win.
-      // My GameScreen logic: if type='regular' and loserCups=0 -> shooter.
-      // If type='regular' and loserCups > 0 (time ran out, I had more cups) -> Regular Win.
-
-      // Let's refine points:
-      // Shooter Win (Cleared cups): 3 pts
-      // Regular Win (Time out, more cups): 3 pts? User didn't specify, but usually win is a win. 
-      // Let's assume 3 pts for any non-OT win, but only track "Shooter Wins" for tiebreaker if cups cleared.
-      // User: "Win before timer ran out... is worth 3 points... and is also a so called 'shooters win'"
-      // This implies: Win by Time Out != Shooter Win.
-      // Let's assume Win by Time Out = 3 pts (standard win) but NO shooter win increment.
-
+      // Regular win (Time ran out but won on cups)
       winnerStats.points += 3;
+      winnerStats.wins++;
+      loserStats.losses++;
     }
 
-    // Cup Diff
-    // User: "Cup differential (opponent cups remaining minus own cups remaining)"
-    // Wait, usually it's (My Cups Remaining - Opponent Cups Remaining).
-    // If I win 6-0. My cups=6, Opp=0. Diff = +6.
-    // If I lose 0-6. My cups=0, Opp=6. Diff = -6.
-    // User said: "opponent cups remaining minus own cups remaining".
-    // If I am winner (6 cups left), opponent (0 cups left). 0 - 6 = -6? That sounds wrong for the winner.
-    // I will assume standard: (Own Remaining - Opponent Remaining).
+    // Cup Stats
+    // Assuming 6 cups per side.
+    // Cups Hit = 6 - Opponent Remaining
+    // Cups Lost = 6 - My Remaining
 
-    winnerStats.cupDiff += (cupsRemaining.winner - cupsRemaining.loser);
-    loserStats.cupDiff += (cupsRemaining.loser - cupsRemaining.winner);
+    // Winner Stats
+    const winnerHit = 6 - cupsRemaining.loser;
+    const winnerLost = 6 - cupsRemaining.winner;
+    winnerStats.cupsHit = (winnerStats.cupsHit || 0) + winnerHit;
+    winnerStats.cupsLost = (winnerStats.cupsLost || 0) + winnerLost;
+    winnerStats.cupDiff += (winnerHit - winnerLost);
+
+    // Loser Stats
+    const loserHit = 6 - cupsRemaining.winner;
+    const loserLost = 6 - cupsRemaining.loser;
+    loserStats.cupsHit = (loserStats.cupsHit || 0) + loserHit;
+    loserStats.cupsLost = (loserStats.cupsLost || 0) + loserLost;
+    loserStats.cupDiff += (loserHit - loserLost);
 
     // Sort Standings
-    // 1. Wins, 2. H2H (Too complex for simple sort, maybe skip for now or do basic), 3. Games won before timer (Shooter Wins?), 4. Cup Diff, 5. Fewest Opponent Cups
-    // User said: Primary: Wins. Secondary: H2H. Tertiary: Games won before timer (Shooter Wins). Quaternary: Cup Diff.
+    // Priority: 1. Points, 2. Wins (Regular + OT?), 3. Shooter Wins, 4. Cup Diff
+    // User didn't specify sort order change, but usually Points is #1.
+    // Previous sort was: Wins -> Shooter Wins -> Cup Diff -> Points.
+    // Given the detailed point system (3-2-1-0), Points should likely be the primary sorter now.
 
     group.standings.sort((a, b) => {
-      if (b.wins !== a.wins) return b.wins - a.wins;
-      // H2H logic is hard to do in a simple sort without looking up matches. 
-      // Simplified: Skip H2H for auto-sort, user can manually verify if close.
+      if (b.points !== a.points) return b.points - a.points;
       if (b.shooterWins !== a.shooterWins) return b.shooterWins - a.shooterWins;
       if (b.cupDiff !== a.cupDiff) return b.cupDiff - a.cupDiff;
-      return b.points - a.points; // Fallback to points if not covered
+
+      // Head-to-Head Tiebreaker
+      const match = group.matches.find(m =>
+        (m.p1 === a.name && m.p2 === b.name) ||
+        (m.p1 === b.name && m.p2 === a.name)
+      );
+
+      if (match && match.winner) {
+        return match.winner === a.name ? -1 : 1;
+      }
+
+      return 0;
     });
 
     setGroups(newGroups);
@@ -402,6 +418,7 @@ function App() {
               groups={groups}
               onMatchClick={handleGroupMatchClick}
               onAdvanceToPlayoffs={goToPlayoffSetup}
+              mode={tournamentConfig?.mode}
             />
           </motion.div>
         )}
