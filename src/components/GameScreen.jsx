@@ -127,22 +127,45 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     };
 
-    const renderPyramid = (cups, teamId) => (
-        <div className="flex flex-col gap-2 items-center">
-            <div className="flex gap-2">
-                <Cup active={cups[0]} onClick={() => toggleCup(teamId, 0)} />
-                <Cup active={cups[1]} onClick={() => toggleCup(teamId, 1)} />
-                <Cup active={cups[2]} onClick={() => toggleCup(teamId, 2)} />
+    const renderPyramid = (cups, teamId, color = 'red', flipped = false) => {
+        if (flipped) {
+            // Team 2 pyramid - horizontal (1-2-3 from left to right)
+            return (
+                <div className="flex gap-2 items-center">
+                    <div className="flex flex-col gap-2">
+                        <Cup active={cups[5]} onClick={() => toggleCup(teamId, 5)} color={color} />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <Cup active={cups[3]} onClick={() => toggleCup(teamId, 3)} color={color} />
+                        <Cup active={cups[4]} onClick={() => toggleCup(teamId, 4)} color={color} />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <Cup active={cups[0]} onClick={() => toggleCup(teamId, 0)} color={color} />
+                        <Cup active={cups[1]} onClick={() => toggleCup(teamId, 1)} color={color} />
+                        <Cup active={cups[2]} onClick={() => toggleCup(teamId, 2)} color={color} />
+                    </div>
+                </div>
+            );
+        }
+
+        // Team 1 pyramid - horizontal (3-2-1 from left to right)
+        return (
+            <div className="flex gap-2 items-center">
+                <div className="flex flex-col gap-2">
+                    <Cup active={cups[0]} onClick={() => toggleCup(teamId, 0)} color={color} />
+                    <Cup active={cups[1]} onClick={() => toggleCup(teamId, 1)} color={color} />
+                    <Cup active={cups[2]} onClick={() => toggleCup(teamId, 2)} color={color} />
+                </div>
+                <div className="flex flex-col gap-2">
+                    <Cup active={cups[3]} onClick={() => toggleCup(teamId, 3)} color={color} />
+                    <Cup active={cups[4]} onClick={() => toggleCup(teamId, 4)} color={color} />
+                </div>
+                <div className="flex flex-col gap-2">
+                    <Cup active={cups[5]} onClick={() => toggleCup(teamId, 5)} color={color} />
+                </div>
             </div>
-            <div className="flex gap-2">
-                <Cup active={cups[3]} onClick={() => toggleCup(teamId, 3)} />
-                <Cup active={cups[4]} onClick={() => toggleCup(teamId, 4)} />
-            </div>
-            <div className="flex gap-2">
-                <Cup active={cups[5]} onClick={() => toggleCup(teamId, 5)} />
-            </div>
-        </div>
-    );
+        );
+    };
 
     return (
         <div className="flex flex-col items-center w-full max-w-5xl animate-fade-in">
@@ -167,7 +190,7 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
                         )}
                     </div>
                     <div className="p-6 bg-white/5 rounded-3xl border border-white/5 shadow-inner">
-                        {renderPyramid(cups1, 1)}
+                        {renderPyramid(cups1, 1, 'blue', false)}
                     </div>
                     <p className="mt-4 text-sm text-gray-400 font-mono">CUPS REMAINING: {cups1.filter(c => c).length}</p>
                 </div>
@@ -180,7 +203,7 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
                 {/* Team 2 Side */}
                 <div className="flex-1 flex flex-col items-center">
                     <div className="flex items-center gap-3 mb-8">
-                        <h2 className="text-3xl font-bold text-pink-400 drop-shadow-lg">{team2}</h2>
+                        <h2 className="text-3xl font-bold text-red-400 drop-shadow-lg">{team2}</h2>
                         {streak2 >= 3 && (
                             <motion.div
                                 initial={{ scale: 0 }}
@@ -193,7 +216,7 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
                         )}
                     </div>
                     <div className="p-6 bg-white/5 rounded-3xl border border-white/5 shadow-inner">
-                        {renderPyramid(cups2, 2)}
+                        {renderPyramid(cups2, 2, 'red', true)}
                     </div>
                     <p className="mt-4 text-sm text-gray-400 font-mono">CUPS REMAINING: {cups2.filter(c => c).length}</p>
                 </div>

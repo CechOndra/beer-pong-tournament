@@ -1,7 +1,22 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-const Cup = ({ active, onClick }) => {
+const Cup = ({ active, onClick, color = 'red' }) => {
+    const colorStyles = {
+        blue: {
+            active: 'bg-blue-600 shadow-blue-600/40',
+            activeInner: 'border-white/20 bg-blue-500',
+            inactive: 'bg-gray-800 border-2 border-gray-700'
+        },
+        red: {
+            active: 'bg-red-600 shadow-red-600/40',
+            activeInner: 'border-white/20 bg-red-500',
+            inactive: 'bg-gray-800 border-2 border-gray-700'
+        }
+    };
+
+    const style = colorStyles[color];
+
     return (
         <motion.div
             onClick={onClick}
@@ -12,9 +27,9 @@ const Cup = ({ active, onClick }) => {
                 scale: active ? 1 : 0.8,
                 filter: active ? 'grayscale(0%)' : 'grayscale(100%) opacity(30%)'
             }}
-            className={`w-14 h-14 md:w-16 md:h-16 rounded-full cursor-pointer relative flex items-center justify-center shadow-xl transition-all duration-300 ${active ? 'bg-red-600 shadow-red-600/40' : 'bg-gray-800 border-2 border-gray-700'}`}
+            className={`w-14 h-14 md:w-16 md:h-16 rounded-full cursor-pointer relative flex items-center justify-center shadow-xl transition-all duration-300 ${active ? style.active : style.inactive}`}
         >
-            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full border-4 ${active ? 'border-white/20 bg-red-500' : 'border-gray-600 bg-gray-700'}`}></div>
+            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full border-4 ${active ? style.activeInner : 'border-gray-600 bg-gray-700'}`}></div>
             {/* Liquid effect / Highlight */}
             {active && (
                 <div className="absolute top-2 right-2 w-3 h-3 bg-white/40 rounded-full blur-[1px]"></div>
