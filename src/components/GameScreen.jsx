@@ -20,13 +20,16 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
     const [formation1, setFormation1] = useState(null); // { type: 'diamond'|'pyramid'|'line', slots: [] }
     const [formation2, setFormation2] = useState(null);
 
+    // Game Summary State
+    const [gameResult, setGameResult] = useState(null);
+
     useEffect(() => {
         let interval = null;
-        if (isActive && timeLeft > 0 && !suddenDeath) {
+        if (isActive && timeLeft > 0 && !suddenDeath && !gameResult) {
             interval = setInterval(() => {
                 setTimeLeft((time) => time - 1);
             }, 1000);
-        } else if (timeLeft === 0 && !suddenDeath) {
+        } else if (timeLeft === 0 && !suddenDeath && !gameResult) {
             // Check for draw
             const remaining1 = cups1.filter(c => c).length;
             const remaining2 = cups2.filter(c => c).length;
@@ -38,7 +41,7 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
             }
         }
         return () => clearInterval(interval);
-    }, [isActive, timeLeft, suddenDeath, cups1, cups2]);
+    }, [isActive, timeLeft, suddenDeath, cups1, cups2, gameResult]);
 
     const addToHistory = () => {
         setHistory(prev => [...prev, {
@@ -152,15 +155,26 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
         if (suddenDeath) winType = 'ot';
         else if (type === 'regular' && loserCups === 0) winType = 'shooter';
 
-        onGameEnd({
+        setGameResult({
             winner: actualWinner,
             loser: loser,
             winType: winType,
             cupsRemaining: {
                 winner: winnerCups,
                 loser: loserCups
+            },
+            stats: {
+                [team1]: { hits: 6 - remaining2, remaining: remaining1 },
+                [team2]: { hits: 6 - remaining1, remaining: remaining2 }
             }
         });
+        setIsActive(false);
+    };
+
+    const finalizeGame = () => {
+        if (gameResult) {
+            onGameEnd(gameResult);
+        }
     };
 
     const formatTime = (seconds) => {
@@ -396,8 +410,59 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
         );
     };
 
+    const renderSummary = () => {
+        if (!gameResult) return null;
+
+        return (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+                <div className="bg-gray-900 border border-white/10 p-8 rounded-3xl max-w-2xl w-full mx-4 shadow-2xl flex flex-col items-center">
+                    <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 mb-2">
+                        GAME OVER
+                    </h2>
+                    <div className="text-2xl font-bold text-white mb-8">
+                        Winner: <span className="text-green-400">{gameResult.winner}</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-8 w-full mb-8">
+                        <div className="bg-white/5 p-6 rounded-xl flex flex-col items-center border border-white/5">
+                            <h3 className="text-xl font-bold text-blue-400 mb-4">{team1}</h3>
+                            <div className="text-4xl font-mono font-bold text-white mb-2">
+                                {gameResult.cupsRemaining.winner === gameResult.stats[team1].remaining ? gameResult.cupsRemaining.winner : gameResult.cupsRemaining.loser}
+                            </div>
+                            <span className="text-xs text-gray-400 uppercase tracking-wider">Cups Left</span>
+                            <div className="mt-4 pt-4 border-t border-white/10 w-full text-center">
+                                <span className="text-2xl font-bold text-green-400">+{gameResult.stats[team1].hits}</span>
+                                <p className="text-xs text-gray-500 uppercase mt-1">Cups Hit</p>
+                            </div>
+                        </div>
+                        <div className="bg-white/5 p-6 rounded-xl flex flex-col items-center border border-white/5">
+                            <h3 className="text-xl font-bold text-red-400 mb-4">{team2}</h3>
+                            <div className="text-4xl font-mono font-bold text-white mb-2">
+                                {gameResult.cupsRemaining.winner === gameResult.stats[team2].remaining ? gameResult.cupsRemaining.winner : gameResult.cupsRemaining.loser}
+                            </div>
+                            <span className="text-xs text-gray-400 uppercase tracking-wider">Cups Left</span>
+                            <div className="mt-4 pt-4 border-t border-white/10 w-full text-center">
+                                <span className="text-2xl font-bold text-green-400">+{gameResult.stats[team2].hits}</span>
+                                <p className="text-xs text-gray-500 uppercase mt-1">Cups Hit</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={finalizeGame}
+                        className="w-full py-4 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white font-bold rounded-xl shadow-lg transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                        Return to Tournament
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
     return (
-        <div className="flex flex-col items-center w-full max-w-5xl animate-fade-in">
+        <div className="flex flex-col items-center w-full max-w-5xl animate-fade-in relative">
+            {renderSummary()}
+
             <div className={`text-6xl font-mono font-bold mb-12 px-8 py-4 rounded-2xl border backdrop-blur-md transition-all ${suddenDeath ? 'text-red-500 border-red-500/50 bg-red-900/20 animate-pulse' : 'text-white border-white/10 bg-black/40 shadow-[0_0_30px_rgba(168,85,247,0.2)]'}`}>
                 {suddenDeath ? 'SUDDEN DEATH' : formatTime(timeLeft)}
             </div>
