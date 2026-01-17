@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Cup from './Cup';
 import { motion } from 'framer-motion';
 
-const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600, tournamentId, matchId, initialGameState, onGameStateChange }) => {
+const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGameEnd, initialTime = 600, tournamentId, matchId, initialGameState, onGameStateChange }) => {
     // True means cup is standing, False means cup is hit/removed
     const [cups1, setCups1] = useState(initialGameState?.cups1 || Array(6).fill(true));
     const [cups2, setCups2] = useState(initialGameState?.cups2 || Array(6).fill(true));
@@ -23,6 +23,10 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600, tournamentId, 
     // Game Summary State
     const [gameResult, setGameResult] = useState(null);
     const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+    // Player selection popup state
+    const [playerSelectPopup, setPlayerSelectPopup] = useState(null); // { team, cupIndex, timeoutId }
+    const [cupHits, setCupHits] = useState(initialGameState?.cupHits || []); // [{ player, team, cupIndex }]
 
     // Handle back button - if game started, show confirmation
     const handleBack = () => {
@@ -141,6 +145,65 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600, tournamentId, 
         setHistory(prev => prev.slice(0, -1));
     };
 
+    // Player selection popup handlers
+    const showPlayerSelect = (team, cupIndex) => {
+        // If there's already a pending selection, auto-assign Unknown
+        if (playerSelectPopup) {
+            // Clear existing timeout
+            if (playerSelectPopup.timeoutId) {
+                clearTimeout(playerSelectPopup.timeoutId);
+            }
+            // Record the previous hit as Unknown
+            const previousHit = {
+                player: 'Unknown',
+                team: playerSelectPopup.team === 1 ? team2 : team1,
+                cupIndex: playerSelectPopup.cupIndex,
+                timestamp: Date.now()
+            };
+            setCupHits(prev => [...prev, previousHit]);
+        }
+
+        // Set new popup with 15-second timeout
+        const timeoutId = setTimeout(() => {
+            selectPlayer('Unknown');
+        }, 15000);
+
+        setPlayerSelectPopup({ team, cupIndex, timeoutId });
+    };
+
+    const selectPlayer = (playerName) => {
+        if (!playerSelectPopup) return;
+
+        // Clear timeout
+        if (playerSelectPopup.timeoutId) {
+            clearTimeout(playerSelectPopup.timeoutId);
+        }
+
+        // Record the hit with player attribution
+        const newHit = {
+            player: playerName,
+            team: playerSelectPopup.team === 1 ? team2 : team1, // Hitting team
+            cupIndex: playerSelectPopup.cupIndex,
+            timestamp: Date.now()
+        };
+        setCupHits(prev => [...prev, newHit]);
+
+        // Log event with player name
+        const hittingTeam = playerSelectPopup.team === 1 ? team2 : team1;
+        logEvent('Hit', {
+            team_name: hittingTeam,
+            player_name: playerName,
+            cup_hit: `Cup ${playerSelectPopup.cupIndex + 1}`,
+            notes: `${playerName} hit Cup ${playerSelectPopup.cupIndex + 1}`
+        });
+
+        setPlayerSelectPopup(null);
+    };
+
+    const dismissPlayerSelect = () => {
+        selectPlayer('Unknown');
+    };
+
     const toggleCup = (team, index) => {
         if (!isActive && !suddenDeath) setIsActive(true);
 
@@ -160,17 +223,8 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600, tournamentId, 
                 setStreak2(prev => prev + 1);
                 setStreak1(0);
 
-                // Log Event (Team 2 hit Team 1's cup)
-                const r1 = newCups.filter(c => c).length;
-                const r2 = cups2.filter(c => c).length;
-                logEvent('Hit', {
-                    team_name: team2,
-                    player_name: team2, // Generic for now
-                    cup_hit: `Cup ${index + 1}`,
-                    score_after: `${(6 - r2)}-${(6 - r1)}`, // Hits: Team2 - Team1 (simplified)
-                    cups_left: `${r2}-${r1}`, // Left: Team2 - Team1
-                    notes: `Team 2 hit Cup ${index + 1}`
-                });
+                // Show player selection popup (Team 2 hit Team 1's cup)
+                showPlayerSelect(team, index);
             }
 
             if (suddenDeath && !newCups[index]) {
@@ -190,17 +244,8 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600, tournamentId, 
                 setStreak1(prev => prev + 1);
                 setStreak2(0);
 
-                // Log Event (Team 1 hit Team 2's cup)
-                const r1 = cups1.filter(c => c).length;
-                const r2 = newCups.filter(c => c).length;
-                logEvent('Hit', {
-                    team_name: team1,
-                    player_name: team1,
-                    cup_hit: `Cup ${index + 1}`,
-                    score_after: `${(6 - r2)}-${(6 - r1)}`, // Hits: Team1 - Team2 (This direction logic might want to be consistent: P1-P2. Let's stick effectively to "ActiveTeam - Opponent" or "Team1 - Team2". Requested "Score After(A-B)" usually means Team A vs Team B. Let's assume P1-P2.)
-                    cups_left: `${r1}-${r2}`, // P1 - P2
-                    notes: `Team 1 hit Cup ${index + 1}`
-                });
+                // Show player selection popup (Team 1 hit Team 2's cup)
+                showPlayerSelect(team, index);
             }
 
             if (suddenDeath && !newCups[index]) {
@@ -257,7 +302,8 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600, tournamentId, 
             stats: {
                 [team1]: { hits: 6 - remaining2, remaining: remaining1 },
                 [team2]: { hits: 6 - remaining1, remaining: remaining2 }
-            }
+            },
+            cupHits: cupHits // Include player-level cup hits
         });
         setIsActive(false);
     };
@@ -678,6 +724,36 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600, tournamentId, 
                     End Game
                 </button>
             </div>
+
+            {/* Inline Player Selection */}
+            {playerSelectPopup && (
+                <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white/10 backdrop-blur-lg rounded-xl border border-white/20 p-4 mt-4 max-w-md mx-auto"
+                >
+                    <p className="text-center text-white text-sm mb-3">
+                        <span className="text-purple-400 font-bold">{playerSelectPopup.team === 1 ? team2 : team1}</span> hit Cup #{playerSelectPopup.cupIndex + 1} — Who scored?
+                    </p>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                        {(playerSelectPopup.team === 1 ? team2Players : team1Players).map((player, i) => (
+                            <button
+                                key={i}
+                                onClick={() => selectPlayer(player || `Player ${i + 1}`)}
+                                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-semibold text-sm transition-all"
+                            >
+                                {player || `Player ${i + 1}`}
+                            </button>
+                        ))}
+                        <button
+                            onClick={() => selectPlayer('Unknown')}
+                            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white/70 rounded-lg text-sm transition-all border border-white/10"
+                        >
+                            Unknown
+                        </button>
+                    </div>
+                </motion.div>
+            )}
         </div>
     );
 };

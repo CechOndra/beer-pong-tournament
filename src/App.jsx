@@ -207,7 +207,7 @@ function App() {
         fetch('/api/teams', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tournament_id: data.id, name: team, group_name: null })
+          body: JSON.stringify({ tournament_id: data.id, name: team.name, players: team.players, group_name: null })
         })
       ));
 
@@ -249,9 +249,10 @@ function App() {
 
     // Initialize Standings and Generate Matches for each group
     newGroups.forEach(group => {
-      // Init Standings
+      // Init Standings - use team.name for display, store reference to team object
       group.standings = group.teams.map(team => ({
-        name: team,
+        name: team.name,
+        players: team.players,
         points: 0,
         wins: 0, // Regular Wins (including Shooter Wins)
         otWins: 0,
@@ -269,8 +270,10 @@ function App() {
         for (let j = i + 1; j < group.teams.length; j++) {
           group.matches.push({
             id: `g${group.name}-${i}-${j}`,
-            p1: group.teams[i],
-            p2: group.teams[j],
+            p1: group.teams[i].name,
+            p1Players: group.teams[i].players,
+            p2: group.teams[j].name,
+            p2Players: group.teams[j].players,
             winner: null,
             winType: null, // 'regular', 'ot', 'shooter'
             stats: null
@@ -367,6 +370,37 @@ function App() {
     loserStats.cupsHit = (loserStats.cupsHit || 0) + loserHit;
     loserStats.cupsLost = (loserStats.cupsLost || 0) + loserLost;
     loserStats.cupDiff += (loserHit - loserLost);
+
+    // Process player-level cup hits
+    if (matchResult.cupHits && matchResult.cupHits.length > 0) {
+      matchResult.cupHits.forEach(hit => {
+        const teamStats = group.standings.find(s => s.name === hit.team);
+        if (teamStats && teamStats.players) {
+          // Initialize playerStats if not existing
+          if (!teamStats.playerStats) {
+            teamStats.playerStats = {};
+          }
+          const playerName = hit.player || 'Unknown';
+          if (!teamStats.playerStats[playerName]) {
+            teamStats.playerStats[playerName] = { cupsHit: 0, gamesPlayed: 0 };
+          }
+          teamStats.playerStats[playerName].cupsHit += 1;
+        }
+      });
+
+      // Update players' gamesPlayed for both teams
+      [winnerStats, loserStats].forEach(stats => {
+        if (stats.players && stats.playerStats) {
+          stats.players.forEach(player => {
+            const pName = player || 'Unknown';
+            if (!stats.playerStats[pName]) {
+              stats.playerStats[pName] = { cupsHit: 0, gamesPlayed: 0 };
+            }
+            stats.playerStats[pName].gamesPlayed += 1;
+          });
+        }
+      });
+    }
 
     // Sort Standings
     // Priority: 1. Points, 2. Wins (Regular + OT?), 3. Shooter Wins, 4. Cup Diff
@@ -836,12 +870,26 @@ function App() {
                       ? groups[currentMatchIndex.groupIndex].matches[currentMatchIndex.matchIndex].p1
                       : matches[currentMatchIndex.roundIndex][currentMatchIndex.matchIndex].p1
                 }
+                team1Players={
+                  currentMatchIndex.type === 'thirdPlace'
+                    ? (teams.find(t => t.name === thirdPlaceMatch.p1)?.players || [])
+                    : currentMatchIndex.type === 'group'
+                      ? (groups[currentMatchIndex.groupIndex].matches[currentMatchIndex.matchIndex].p1Players || [])
+                      : (teams.find(t => t.name === matches[currentMatchIndex.roundIndex][currentMatchIndex.matchIndex].p1)?.players || [])
+                }
                 team2={
                   currentMatchIndex.type === 'thirdPlace'
                     ? thirdPlaceMatch.p2
                     : currentMatchIndex.type === 'group'
                       ? groups[currentMatchIndex.groupIndex].matches[currentMatchIndex.matchIndex].p2
                       : matches[currentMatchIndex.roundIndex][currentMatchIndex.matchIndex].p2
+                }
+                team2Players={
+                  currentMatchIndex.type === 'thirdPlace'
+                    ? (teams.find(t => t.name === thirdPlaceMatch.p2)?.players || [])
+                    : currentMatchIndex.type === 'group'
+                      ? (groups[currentMatchIndex.groupIndex].matches[currentMatchIndex.matchIndex].p2Players || [])
+                      : (teams.find(t => t.name === matches[currentMatchIndex.roundIndex][currentMatchIndex.matchIndex].p2)?.players || [])
                 }
                 onGameEnd={handleGameEnd}
                 initialTime={
