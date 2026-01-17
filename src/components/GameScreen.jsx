@@ -27,7 +27,6 @@ const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGame
     // Player selection popup state
     const [playerSelectPopup, setPlayerSelectPopup] = useState(null); // { team, cupIndex, timeoutId }
     const [cupHits, setCupHits] = useState(initialGameState?.cupHits || []); // [{ player, team, cupIndex }]
-    const [pendingWin, setPendingWin] = useState(null); // { winner, type, cups1, cups2 }
 
     // Handle back button - if game started, show confirmation
     const handleBack = () => {
@@ -199,14 +198,6 @@ const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGame
         });
 
         setPlayerSelectPopup(null);
-
-        // If there's a pending win, process it now
-        if (pendingWin) {
-            setTimeout(() => {
-                handleGameEnd(pendingWin.winner, pendingWin.type, pendingWin.cups1, pendingWin.cups2);
-                setPendingWin(null);
-            }, 300);
-        }
     };
 
     const dismissPlayerSelect = () => {
@@ -238,7 +229,7 @@ const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGame
 
             if (suddenDeath && !newCups[index]) {
                 // Cup removed in sudden death -> Team 2 wins
-                setPendingWin({ winner: team2, type: 'ot', cups1: newCups, cups2: cups2 });
+                handleGameEnd(team2, 'ot', newCups, cups2);
             } else {
                 checkWinner(newCups, cups2);
             }
@@ -259,7 +250,7 @@ const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGame
 
             if (suddenDeath && !newCups[index]) {
                 // Cup removed in sudden death -> Team 1 wins
-                setPendingWin({ winner: team1, type: 'ot', cups1: cups1, cups2: newCups });
+                handleGameEnd(team1, 'ot', cups1, newCups);
             } else {
                 checkWinner(cups1, newCups);
             }
@@ -269,12 +260,12 @@ const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGame
     const checkWinner = (c1, c2) => {
         // If Team 1 loses all cups, Team 2 wins
         if (c1.every(c => !c)) {
-            // Set pending win - will be processed after player selects
-            setPendingWin({ winner: team2, type: 'shooter', cups1: c1, cups2: c2 });
+            // Show game result immediately - player selection will be on the summary screen
+            handleGameEnd(team2, 'shooter', c1, c2);
         }
         // If Team 2 loses all cups, Team 1 wins
         if (c2.every(c => !c)) {
-            setPendingWin({ winner: team1, type: 'shooter', cups1: c1, cups2: c2 });
+            handleGameEnd(team1, 'shooter', c1, c2);
         }
     };
 
@@ -574,6 +565,9 @@ const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGame
     const renderSummary = () => {
         if (!gameResult) return null;
 
+        // Check if there's a pending player selection for the winning shot
+        const hasPendingSelection = playerSelectPopup !== null;
+
         return (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
                 <div className="bg-gray-900 border border-white/10 p-8 rounded-3xl max-w-2xl w-full mx-4 shadow-2xl flex flex-col items-center">
@@ -583,6 +577,32 @@ const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGame
                     <div className="text-2xl font-bold text-white mb-8">
                         Winner: <span className="text-green-400">{gameResult.winner}</span>
                     </div>
+
+                    {/* Player Selection for winning shot */}
+                    {hasPendingSelection && (
+                        <div className="w-full bg-purple-900/30 border border-purple-500/30 rounded-xl p-4 mb-6">
+                            <p className="text-center text-white text-sm mb-3">
+                                <span className="text-purple-400 font-bold">{playerSelectPopup.team === 1 ? team2 : team1}</span> hit the winning shot — Who scored?
+                            </p>
+                            <div className="flex flex-wrap gap-2 justify-center">
+                                {(playerSelectPopup.team === 1 ? team2Players : team1Players).map((player, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => selectPlayer(player || `Player ${i + 1}`)}
+                                        className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-semibold text-sm transition-all"
+                                    >
+                                        {player || `Player ${i + 1}`}
+                                    </button>
+                                ))}
+                                <button
+                                    onClick={() => selectPlayer('Unknown')}
+                                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white/70 rounded-lg text-sm transition-all border border-white/10"
+                                >
+                                    Skip
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-8 w-full mb-8">
                         <div className="bg-white/5 p-6 rounded-xl flex flex-col items-center border border-white/5">
@@ -611,9 +631,12 @@ const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGame
 
                     <button
                         onClick={finalizeGame}
-                        className="w-full py-4 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white font-bold rounded-xl shadow-lg transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                        disabled={hasPendingSelection}
+                        className={`w-full py-4 font-bold rounded-xl shadow-lg transition-all transform ${hasPendingSelection
+                            ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white hover:scale-[1.02] active:scale-[0.98]'}`}
                     >
-                        Return to Tournament
+                        {hasPendingSelection ? 'Select who scored first' : 'Return to Tournament'}
                     </button>
                 </div>
             </div>
