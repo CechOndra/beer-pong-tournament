@@ -26,7 +26,7 @@ function App() {
   const [gameState, setGameState] = useState(null); // { cups1, cups2, timeLeft, streak1, streak2, etc. }
   const [activeGroupTab, setActiveGroupTab] = useState(0); // Track which group tab is active
   const [playoffPlayerStats, setPlayoffPlayerStats] = useState({}); // { teamName: { playerName: { cupsHit, gamesPlayed } } }
-  const [showTopShooters, setShowTopShooters] = useState(false); // Show player stats on winner screen
+  const [resultsView, setResultsView] = useState(null); // 'stats' | 'bracket' | 'groups' | null
 
   // --- State Restoration on Load ---
   useEffect(() => {
@@ -121,7 +121,7 @@ function App() {
         setCurrentMatchId(savedState.currentMatchId || null);
         setGameState(savedState.gameState || null);
         setPlayoffPlayerStats(savedState.playoffPlayerStats || {}); // Restore per-tournament playoff stats
-        setShowTopShooters(false);
+        setResultsView(null);
       } else {
         // Tournament exists but no app_state yet, go to input
         setTournamentId(id);
@@ -161,7 +161,7 @@ function App() {
     setCurrentMatchId(null);
     setGameState(null);
     setPlayoffPlayerStats({}); // Reset per-tournament playoff stats
-    setShowTopShooters(false);
+    setResultsView(null);
     fetchAllTournaments();
   };
 
@@ -667,7 +667,14 @@ function App() {
       setView('groups');
     } else if (currentMatchIndex.type === 'thirdPlace') {
       // 3rd Place Match
-      const newThirdPlace = { ...thirdPlaceMatch, winner: winnerName };
+      const newThirdPlace = {
+        ...thirdPlaceMatch,
+        winner: winnerName,
+        score: result.cupsRemaining ? {
+          winner: result.cupsRemaining.winner,
+          loser: result.cupsRemaining.loser
+        } : null
+      };
       setThirdPlaceMatch(newThirdPlace);
       updatePlayoffPlayerStats(result);
       setView('bracket');
@@ -677,6 +684,13 @@ function App() {
       const newMatches = JSON.parse(JSON.stringify(matches));
 
       newMatches[roundIndex][matchIndex].winner = winnerName;
+      // Store match score
+      if (result.cupsRemaining) {
+        newMatches[roundIndex][matchIndex].score = {
+          winner: result.cupsRemaining.winner,
+          loser: result.cupsRemaining.loser
+        };
+      }
       updatePlayoffPlayerStats(result);
 
       // Check if this is a semi-final (second-to-last round)
@@ -940,28 +954,62 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="flex gap-4 mt-4">
+                  {/* View Toggle Buttons */}
+                  <div className="flex flex-wrap gap-3 mt-4 justify-center">
                     <button
-                      onClick={() => setShowTopShooters(!showTopShooters)}
-                      className="bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 px-6 py-3 rounded-xl font-bold transition-all border border-purple-500/30 hover:scale-105"
+                      onClick={() => setResultsView(resultsView === 'stats' ? null : 'stats')}
+                      className={`px-5 py-2.5 rounded-xl font-bold transition-all border ${resultsView === 'stats' ? 'bg-purple-600 text-white border-purple-500' : 'bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border-purple-500/30'} hover:scale-105`}
                     >
-                      {showTopShooters ? 'Hide Top Shooters' : '🎯 Show Top Shooters'}
+                      🎯 Player Stats
                     </button>
                     <button
+                      onClick={() => setResultsView(resultsView === 'bracket' ? null : 'bracket')}
+                      className={`px-5 py-2.5 rounded-xl font-bold transition-all border ${resultsView === 'bracket' ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border-blue-500/30'} hover:scale-105`}
+                    >
+                      🏆 Playoff Bracket
+                    </button>
+                    {groups.length > 0 && (
+                      <button
+                        onClick={() => setResultsView(resultsView === 'groups' ? null : 'groups')}
+                        className={`px-5 py-2.5 rounded-xl font-bold transition-all border ${resultsView === 'groups' ? 'bg-green-600 text-white border-green-500' : 'bg-green-600/20 hover:bg-green-600/40 text-green-300 border-green-500/30'} hover:scale-105`}
+                      >
+                        📊 Group Tables
+                      </button>
+                    )}
+                    <button
                       onClick={exitTournament}
-                      className="bg-white/10 hover:bg-white/20 text-white px-8 py-3 rounded-xl font-bold transition-all border border-white/20 hover:scale-105"
+                      className="bg-white/10 hover:bg-white/20 text-white px-6 py-2.5 rounded-xl font-bold transition-all border border-white/20 hover:scale-105"
                     >
                       Back to Tournaments
                     </button>
                   </div>
 
-                  {/* Top Shooters Table */}
-                  {showTopShooters && (
+                  {/* Results View Content */}
+                  {resultsView === 'stats' && (
                     <TopShootersTable
                       groups={groups}
                       playoffPlayerStats={playoffPlayerStats}
                       teams={teams}
                     />
+                  )}
+                  {resultsView === 'bracket' && (
+                    <div className="mt-8 w-full">
+                      <Bracket
+                        matches={matches}
+                        onMatchClick={() => { }} // Read-only
+                        thirdPlaceMatch={thirdPlaceMatch}
+                        onThirdPlaceMatchClick={() => { }} // Read-only
+                      />
+                    </div>
+                  )}
+                  {resultsView === 'groups' && (
+                    <div className="mt-8 w-full">
+                      <GroupStage
+                        groups={groups}
+                        onMatchClick={() => { }} // Read-only
+                        readOnly={true}
+                      />
+                    </div>
                   )}
                 </div>
               ) : (

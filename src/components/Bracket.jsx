@@ -21,6 +21,9 @@ const Bracket = ({ matches, onMatchClick, thirdPlaceMatch, onThirdPlaceMatchClic
                                 const p1Name = getTeamName(match.p1);
                                 const p2Name = getTeamName(match.p2);
                                 const winnerName = getTeamName(match.winner);
+                                const score = match.score;
+                                const p1Score = winnerName === p1Name ? score?.winner : score?.loser;
+                                const p2Score = winnerName === p2Name ? score?.winner : score?.loser;
 
                                 return (
                                     <motion.div
@@ -30,13 +33,15 @@ const Bracket = ({ matches, onMatchClick, thirdPlaceMatch, onThirdPlaceMatchClic
                                         onClick={() => !winnerName && p1Name && p2Name && onMatchClick(roundIndex, matchIndex)}
                                     >
                                         <div className={`flex justify-between items-center mb-2 p-1 rounded ${winnerName === p1Name ? 'bg-green-500/20 text-green-400 font-bold' : 'text-white'}`}>
-                                            <span className="truncate">{p1Name || 'TBD'}</span>
-                                            {winnerName === p1Name && <span>🏆</span>}
+                                            <span className="truncate flex-1">{p1Name || 'TBD'}</span>
+                                            {score && <span className="text-sm font-mono ml-2 px-2 py-0.5 rounded bg-white/10">{p1Score}</span>}
+                                            {winnerName === p1Name && <span className="ml-1">🏆</span>}
                                         </div>
                                         <div className="h-[1px] w-full bg-white/10 mb-2"></div>
                                         <div className={`flex justify-between items-center p-1 rounded ${winnerName === p2Name ? 'bg-green-500/20 text-green-400 font-bold' : 'text-white'}`}>
-                                            <span className="truncate">{p2Name || 'TBD'}</span>
-                                            {winnerName === p2Name && <span>🏆</span>}
+                                            <span className="truncate flex-1">{p2Name || 'TBD'}</span>
+                                            {score && <span className="text-sm font-mono ml-2 px-2 py-0.5 rounded bg-white/10">{p2Score}</span>}
+                                            {winnerName === p2Name && <span className="ml-1">🏆</span>}
                                         </div>
 
                                         {!winnerName && p1Name && p2Name && (
@@ -57,6 +62,9 @@ const Bracket = ({ matches, onMatchClick, thirdPlaceMatch, onThirdPlaceMatchClic
                 const p1Name = getTeamName(thirdPlaceMatch.p1);
                 const p2Name = getTeamName(thirdPlaceMatch.p2);
                 const winnerName = getTeamName(thirdPlaceMatch.winner);
+                const score = thirdPlaceMatch.score;
+                const p1Score = winnerName === p1Name ? score?.winner : score?.loser;
+                const p2Score = winnerName === p2Name ? score?.winner : score?.loser;
 
                 return (
                     <div className="flex justify-center mt-8 mb-4">
@@ -70,13 +78,15 @@ const Bracket = ({ matches, onMatchClick, thirdPlaceMatch, onThirdPlaceMatchClic
                                 onClick={() => !winnerName && onThirdPlaceMatchClick()}
                             >
                                 <div className={`flex justify-between items-center mb-2 p-1 rounded ${winnerName === p1Name ? 'bg-amber-500/20 text-amber-400 font-bold' : 'text-white'}`}>
-                                    <span className="truncate">{p1Name}</span>
-                                    {winnerName === p1Name && <span>🥉</span>}
+                                    <span className="truncate flex-1">{p1Name}</span>
+                                    {score && <span className="text-sm font-mono ml-2 px-2 py-0.5 rounded bg-white/10">{p1Score}</span>}
+                                    {winnerName === p1Name && <span className="ml-1">🥉</span>}
                                 </div>
                                 <div className="h-[1px] w-full bg-white/10 mb-2"></div>
                                 <div className={`flex justify-between items-center p-1 rounded ${winnerName === p2Name ? 'bg-amber-500/20 text-amber-400 font-bold' : 'text-white'}`}>
-                                    <span className="truncate">{p2Name}</span>
-                                    {winnerName === p2Name && <span>🥉</span>}
+                                    <span className="truncate flex-1">{p2Name}</span>
+                                    {score && <span className="text-sm font-mono ml-2 px-2 py-0.5 rounded bg-white/10">{p2Score}</span>}
+                                    {winnerName === p2Name && <span className="ml-1">🥉</span>}
                                 </div>
 
                                 {!winnerName && (
