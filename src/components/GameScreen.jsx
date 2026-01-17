@@ -27,6 +27,7 @@ const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGame
     // Player selection popup state
     const [playerSelectPopup, setPlayerSelectPopup] = useState(null); // { team, cupIndex, timeoutId }
     const [cupHits, setCupHits] = useState(initialGameState?.cupHits || []); // [{ player, team, cupIndex }]
+    const [pendingWin, setPendingWin] = useState(null); // { winner, type, cups1, cups2 }
 
     // Handle back button - if game started, show confirmation
     const handleBack = () => {
@@ -198,6 +199,14 @@ const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGame
         });
 
         setPlayerSelectPopup(null);
+
+        // If there's a pending win, process it now
+        if (pendingWin) {
+            setTimeout(() => {
+                handleGameEnd(pendingWin.winner, pendingWin.type, pendingWin.cups1, pendingWin.cups2);
+                setPendingWin(null);
+            }, 300);
+        }
     };
 
     const dismissPlayerSelect = () => {
@@ -229,7 +238,7 @@ const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGame
 
             if (suddenDeath && !newCups[index]) {
                 // Cup removed in sudden death -> Team 2 wins
-                setTimeout(() => handleGameEnd(team2, 'ot', newCups, cups2), 500);
+                setPendingWin({ winner: team2, type: 'ot', cups1: newCups, cups2: cups2 });
             } else {
                 checkWinner(newCups, cups2);
             }
@@ -250,7 +259,7 @@ const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGame
 
             if (suddenDeath && !newCups[index]) {
                 // Cup removed in sudden death -> Team 1 wins
-                setTimeout(() => handleGameEnd(team1, 'ot', cups1, newCups), 500);
+                setPendingWin({ winner: team1, type: 'ot', cups1: cups1, cups2: newCups });
             } else {
                 checkWinner(cups1, newCups);
             }
@@ -260,11 +269,12 @@ const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGame
     const checkWinner = (c1, c2) => {
         // If Team 1 loses all cups, Team 2 wins
         if (c1.every(c => !c)) {
-            setTimeout(() => handleGameEnd(team2, 'shooter', c1, c2), 500);
+            // Set pending win - will be processed after player selects
+            setPendingWin({ winner: team2, type: 'shooter', cups1: c1, cups2: c2 });
         }
         // If Team 2 loses all cups, Team 1 wins
         if (c2.every(c => !c)) {
-            setTimeout(() => handleGameEnd(team1, 'shooter', c1, c2), 500);
+            setPendingWin({ winner: team1, type: 'shooter', cups1: c1, cups2: c2 });
         }
     };
 
@@ -730,9 +740,17 @@ const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGame
                 <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-white/10 backdrop-blur-lg rounded-xl border border-white/20 p-4 mt-4 max-w-md mx-auto"
+                    className="bg-white/10 backdrop-blur-lg rounded-xl border border-white/20 p-4 mt-4 max-w-md mx-auto relative"
                 >
-                    <p className="text-center text-white text-sm mb-3">
+                    {/* Close X button */}
+                    <button
+                        onClick={() => selectPlayer('Unknown')}
+                        className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded-full transition-all"
+                    >
+                        ✕
+                    </button>
+
+                    <p className="text-center text-white text-sm mb-3 pr-6">
                         <span className="text-purple-400 font-bold">{playerSelectPopup.team === 1 ? team2 : team1}</span> hit Cup #{playerSelectPopup.cupIndex + 1} — Who scored?
                     </p>
                     <div className="flex flex-wrap gap-2 justify-center">
@@ -745,12 +763,6 @@ const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGame
                                 {player || `Player ${i + 1}`}
                             </button>
                         ))}
-                        <button
-                            onClick={() => selectPlayer('Unknown')}
-                            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white/70 rounded-lg text-sm transition-all border border-white/10"
-                        >
-                            Unknown
-                        </button>
                     </div>
                 </motion.div>
             )}
