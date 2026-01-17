@@ -6,6 +6,8 @@ const GroupStage = ({ groups, onMatchClick, onAdvanceToPlayoffs, mode, initialAc
     const [activeTooltip, setActiveTooltip] = useState(null);
     const [activeHeaderTooltip, setActiveHeaderTooltip] = useState(null);
     const [statsView, setStatsView] = useState('teams'); // 'teams' or 'players'
+    const [hideUnknown, setHideUnknown] = useState(true); // Hide Unknown players by default
+    const [groupFilter, setGroupFilter] = useState('all'); // 'all' or group name like 'A', 'B'
 
     // Sync activeTab with initialActiveTab prop when it changes
     useEffect(() => {
@@ -34,6 +36,7 @@ const GroupStage = ({ groups, onMatchClick, onAdvanceToPlayoffs, mode, initialAc
                     playerList.push({
                         name: playerName,
                         team: team.name,
+                        group: group.name,
                         cupsHit: stats.cupsHit || 0,
                         gamesPlayed: stats.gamesPlayed || 0
                     });
@@ -44,6 +47,7 @@ const GroupStage = ({ groups, onMatchClick, onAdvanceToPlayoffs, mode, initialAc
                     playerList.push({
                         name: 'Unknown',
                         team: team.name,
+                        group: group.name,
                         cupsHit: team.playerStats['Unknown'].cupsHit || 0,
                         gamesPlayed: team.playerStats['Unknown'].gamesPlayed || 0
                     });
@@ -266,7 +270,30 @@ const GroupStage = ({ groups, onMatchClick, onAdvanceToPlayoffs, mode, initialAc
                         animate={{ opacity: 1, x: 0 }}
                         className="bg-white/5 rounded-2xl border border-white/10 p-6"
                     >
-                        <h3 className="text-2xl font-bold text-purple-300 mb-6">Player Statistics</h3>
+                        <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
+                            <h3 className="text-2xl font-bold text-purple-300">Player Statistics</h3>
+                            <div className="flex items-center gap-4">
+                                <select
+                                    value={groupFilter}
+                                    onChange={(e) => setGroupFilter(e.target.value)}
+                                    className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                >
+                                    <option value="all">All Groups</option>
+                                    {groups.map((g, i) => (
+                                        <option key={i} value={g.name}>Group {g.name}</option>
+                                    ))}
+                                </select>
+                                <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={hideUnknown}
+                                        onChange={(e) => setHideUnknown(e.target.checked)}
+                                        className="w-4 h-4 rounded bg-white/10 border-white/20 text-purple-500 focus:ring-purple-500"
+                                    />
+                                    Hide Unknown
+                                </label>
+                            </div>
+                        </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
@@ -274,24 +301,29 @@ const GroupStage = ({ groups, onMatchClick, onAdvanceToPlayoffs, mode, initialAc
                                         <th className="p-3">#</th>
                                         <th className="p-3">Player</th>
                                         <th className="p-3">Team</th>
+                                        <th className="p-3">Group</th>
                                         <th className="p-3 text-center">Cups Hit</th>
                                         <th className="p-3 text-center">Games</th>
                                         <th className="p-3 text-center">Cups/Game</th>
                                     </tr>
                                 </thead>
                                 <tbody className="text-sm">
-                                    {computePlayerStats().map((player, i) => (
-                                        <tr key={i} className="border-b border-white/5">
-                                            <td className="p-3 font-mono text-gray-400">{i + 1}</td>
-                                            <td className="p-3 font-bold text-white">{player.name}</td>
-                                            <td className="p-3 text-gray-300">{player.team}</td>
-                                            <td className="p-3 text-center text-green-400">{player.cupsHit}</td>
-                                            <td className="p-3 text-center text-gray-300">{player.gamesPlayed}</td>
-                                            <td className="p-3 text-center text-yellow-400">
-                                                {player.gamesPlayed > 0 ? (player.cupsHit / player.gamesPlayed).toFixed(1) : '-'}
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {computePlayerStats()
+                                        .filter(player => groupFilter === 'all' || player.group === groupFilter)
+                                        .filter(player => !hideUnknown || player.name !== 'Unknown')
+                                        .map((player, i) => (
+                                            <tr key={i} className="border-b border-white/5">
+                                                <td className="p-3 font-mono text-gray-400">{i + 1}</td>
+                                                <td className="p-3 font-bold text-white">{player.name}</td>
+                                                <td className="p-3 text-gray-300">{player.team}</td>
+                                                <td className="p-3 text-purple-400">{player.group}</td>
+                                                <td className="p-3 text-center text-green-400">{player.cupsHit}</td>
+                                                <td className="p-3 text-center text-gray-300">{player.gamesPlayed}</td>
+                                                <td className="p-3 text-center text-yellow-400">
+                                                    {player.gamesPlayed > 0 ? (player.cupsHit / player.gamesPlayed).toFixed(1) : '-'}
+                                                </td>
+                                            </tr>
+                                        ))}
                                 </tbody>
                             </table>
                             {computePlayerStats().length === 0 && (

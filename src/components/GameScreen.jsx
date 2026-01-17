@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import Cup from './Cup';
 import { motion } from 'framer-motion';
 
-const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGameEnd, initialTime = 600, tournamentId, matchId, initialGameState, onGameStateChange }) => {
+const GameScreen = ({ team1: team1Prop, team1Players = [], team2: team2Prop, team2Players = [], onGameEnd, initialTime = 600, tournamentId, matchId, initialGameState, onGameStateChange }) => {
+    // Extract team names in case they're objects with {name, players} structure
+    const team1 = typeof team1Prop === 'object' ? team1Prop.name : team1Prop;
+    const team2 = typeof team2Prop === 'object' ? team2Prop.name : team2Prop;
     // True means cup is standing, False means cup is hit/removed
     const [cups1, setCups1] = useState(initialGameState?.cups1 || Array(6).fill(true));
     const [cups2, setCups2] = useState(initialGameState?.cups2 || Array(6).fill(true));
@@ -585,15 +588,25 @@ const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGame
                                 <span className="text-purple-400 font-bold">{playerSelectPopup.team === 1 ? team2 : team1}</span> hit the winning shot — Who scored?
                             </p>
                             <div className="flex flex-wrap gap-2 justify-center">
-                                {(playerSelectPopup.team === 1 ? team2Players : team1Players).map((player, i) => (
-                                    <button
-                                        key={i}
-                                        onClick={() => selectPlayer(player || `Player ${i + 1}`)}
-                                        className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-semibold text-sm transition-all"
-                                    >
-                                        {player || `Player ${i + 1}`}
-                                    </button>
-                                ))}
+                                {((playerSelectPopup.team === 1 ? team2Players : team1Players).length > 0
+                                    ? (playerSelectPopup.team === 1 ? team2Players : team1Players).map((player, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => selectPlayer(player || `Player ${i + 1}`)}
+                                            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-semibold text-sm transition-all"
+                                        >
+                                            {player || `Player ${i + 1}`}
+                                        </button>
+                                    ))
+                                    : (
+                                        <button
+                                            onClick={() => selectPlayer('Unknown')}
+                                            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-semibold text-sm transition-all"
+                                        >
+                                            Unknown Player
+                                        </button>
+                                    )
+                                )}
                                 <button
                                     onClick={() => selectPlayer('Unknown')}
                                     className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white/70 rounded-lg text-sm transition-all border border-white/10"
@@ -777,15 +790,25 @@ const GameScreen = ({ team1, team1Players = [], team2, team2Players = [], onGame
                         <span className="text-purple-400 font-bold">{playerSelectPopup.team === 1 ? team2 : team1}</span> hit Cup #{playerSelectPopup.cupIndex + 1} — Who scored?
                     </p>
                     <div className="flex flex-wrap gap-2 justify-center">
-                        {(playerSelectPopup.team === 1 ? team2Players : team1Players).map((player, i) => (
-                            <button
-                                key={i}
-                                onClick={() => selectPlayer(player || `Player ${i + 1}`)}
-                                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-semibold text-sm transition-all"
-                            >
-                                {player || `Player ${i + 1}`}
-                            </button>
-                        ))}
+                        {((playerSelectPopup.team === 1 ? team2Players : team1Players).length > 0
+                            ? (playerSelectPopup.team === 1 ? team2Players : team1Players).map((player, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => selectPlayer(player || `Player ${i + 1}`)}
+                                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-semibold text-sm transition-all"
+                                >
+                                    {player || `Player ${i + 1}`}
+                                </button>
+                            ))
+                            : (
+                                <button
+                                    onClick={() => selectPlayer('Unknown')}
+                                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-semibold text-sm transition-all"
+                                >
+                                    Unknown Player
+                                </button>
+                            )
+                        )}
                     </div>
                 </motion.div>
             )}

@@ -5,6 +5,7 @@ import Bracket from './components/Bracket';
 import GameScreen from './components/GameScreen';
 import TournamentSetup from './components/TournamentSetup';
 import GroupStage from './components/GroupStage';
+import TopShootersTable from './components/TopShootersTable';
 import { AnimatePresence, motion } from 'framer-motion';
 
 function App() {
@@ -24,6 +25,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [gameState, setGameState] = useState(null); // { cups1, cups2, timeLeft, streak1, streak2, etc. }
   const [activeGroupTab, setActiveGroupTab] = useState(0); // Track which group tab is active
+  const [playoffPlayerStats, setPlayoffPlayerStats] = useState({}); // { teamName: { playerName: { cupsHit, gamesPlayed } } }
+  const [showTopShooters, setShowTopShooters] = useState(false); // Show player stats on winner screen
 
   // --- State Restoration on Load ---
   useEffect(() => {
@@ -117,6 +120,8 @@ function App() {
         setCurrentMatchIndex(savedState.currentMatchIndex || null);
         setCurrentMatchId(savedState.currentMatchId || null);
         setGameState(savedState.gameState || null);
+        setPlayoffPlayerStats(savedState.playoffPlayerStats || {}); // Restore per-tournament playoff stats
+        setShowTopShooters(false);
       } else {
         // Tournament exists but no app_state yet, go to input
         setTournamentId(id);
@@ -155,6 +160,8 @@ function App() {
     setCurrentMatchIndex(null);
     setCurrentMatchId(null);
     setGameState(null);
+    setPlayoffPlayerStats({}); // Reset per-tournament playoff stats
+    setShowTopShooters(false);
     fetchAllTournaments();
   };
 
@@ -174,7 +181,8 @@ function App() {
       tempPlayoffTime,
       currentMatchIndex,
       currentMatchId,
-      gameState
+      gameState,
+      playoffPlayerStats // Include per-tournament playoff stats
     };
 
     fetch(`/api/tournaments/${tournamentId}/state`, {
@@ -182,7 +190,7 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ appState })
     }).catch(err => console.error('Failed to save state:', err));
-  }, [view, teams, matches, groups, tournamentConfig, winner, thirdPlaceMatch, playoffGameTime, tempPlayoffTime, currentMatchIndex, currentMatchId, gameState, tournamentId, isLoading]);
+  }, [view, teams, matches, groups, tournamentConfig, winner, thirdPlaceMatch, playoffGameTime, tempPlayoffTime, currentMatchIndex, currentMatchId, gameState, playoffPlayerStats, tournamentId, isLoading]);
 
   // --- Navigation & Setup ---
 
@@ -429,6 +437,49 @@ function App() {
     setGroups(newGroups);
   };
 
+  // Update playoff player stats from cupHits
+  const updatePlayoffPlayerStats = (matchResult) => {
+    const newStats = { ...playoffPlayerStats };
+
+    // Process each cup hit (if any)
+    if (matchResult.cupHits && matchResult.cupHits.length > 0) {
+      matchResult.cupHits.forEach(hit => {
+        const teamName = hit.team;
+        const playerName = hit.player || 'Unknown';
+
+        if (!newStats[teamName]) {
+          newStats[teamName] = {};
+        }
+        if (!newStats[teamName][playerName]) {
+          newStats[teamName][playerName] = { cupsHit: 0, gamesPlayed: 0 };
+        }
+        newStats[teamName][playerName].cupsHit += 1;
+      });
+    }
+
+    // Update games played for players in both teams
+    // Extract team names in case they're objects
+    const team1Name = typeof matchResult.winner === 'object' ? matchResult.winner.name : matchResult.winner;
+    const team2Name = typeof matchResult.loser === 'object' ? matchResult.loser.name : matchResult.loser;
+
+    [team1Name, team2Name].forEach(teamName => {
+      if (!teamName) return;
+      const teamData = teams.find(t => t.name === teamName);
+      if (teamData && teamData.players) {
+        if (!newStats[teamName]) newStats[teamName] = {};
+        teamData.players.forEach(player => {
+          const pName = player || 'Unknown';
+          if (!newStats[teamName][pName]) {
+            newStats[teamName][pName] = { cupsHit: 0, gamesPlayed: 0 };
+          }
+          newStats[teamName][pName].gamesPlayed += 1;
+        });
+      }
+    });
+
+    setPlayoffPlayerStats(newStats);
+  };
+
   const goToPlayoffSetup = () => {
     setView('playoffSetup');
   };
@@ -618,6 +669,7 @@ function App() {
       // 3rd Place Match
       const newThirdPlace = { ...thirdPlaceMatch, winner: winnerName };
       setThirdPlaceMatch(newThirdPlace);
+      updatePlayoffPlayerStats(result);
       setView('bracket');
     } else {
       // Bracket Match
@@ -625,6 +677,7 @@ function App() {
       const newMatches = JSON.parse(JSON.stringify(matches));
 
       newMatches[roundIndex][matchIndex].winner = winnerName;
+      updatePlayoffPlayerStats(result);
 
       // Check if this is a semi-final (second-to-last round)
       const isSemiFinal = roundIndex === newMatches.length - 2;
@@ -641,10 +694,17 @@ function App() {
 
         // If semi-final, add loser to 3rd place match
         if (isSemiFinal) {
-          const loserName = typeof result === 'object' ? result.loser :
-            (newMatches[roundIndex][matchIndex].p1 === winnerName ?
-              newMatches[roundIndex][matchIndex].p2 :
-              newMatches[roundIndex][matchIndex].p1);
+          // Get loser name from result, or compute from match data
+          let loserName;
+          if (typeof result === 'object' && result.loser) {
+            loserName = result.loser;
+          } else {
+            const p1 = newMatches[roundIndex][matchIndex].p1;
+            const p2 = newMatches[roundIndex][matchIndex].p2;
+            const p1Name = typeof p1 === 'object' ? p1.name : p1;
+            const p2Name = typeof p2 === 'object' ? p2.name : p2;
+            loserName = p1Name === winnerName ? p2Name : p1Name;
+          }
 
           if (!thirdPlaceMatch) {
             // First semi-final completed
@@ -831,17 +891,78 @@ function App() {
                 ← Exit Tournament
               </button>
               {winner ? (
-                <div className="text-center flex flex-col items-center">
-                  <h2 className="text-5xl md:text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 mb-8 animate-bounce drop-shadow-lg">
-                    🏆 {winner} Wins! 🏆
+                <div className="text-center flex flex-col items-center max-w-2xl mx-auto">
+                  <h2 className="text-5xl md:text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 mb-4 animate-bounce drop-shadow-lg">
+                    🏆 Tournament Complete! 🏆
                   </h2>
-                  <div className="text-2xl text-white/80 mb-12">The ultimate beer pong champions</div>
-                  <button
-                    onClick={exitTournament}
-                    className="bg-white/10 hover:bg-white/20 text-white px-8 py-3 rounded-xl font-bold transition-all border border-white/20 hover:scale-105"
-                  >
-                    Back to Tournaments
-                  </button>
+
+                  {/* Podium */}
+                  <div className="flex items-end justify-center gap-4 mb-8 mt-8">
+                    {/* 2nd Place */}
+                    <div className="flex flex-col items-center">
+                      <div className="text-4xl mb-2">🥈</div>
+                      <div className="bg-gray-500/30 border border-gray-400/30 rounded-t-xl px-6 py-4 min-w-[120px]">
+                        <div className="text-lg font-bold text-gray-300">2nd Place</div>
+                        <div className="text-xl font-bold text-white">
+                          {(() => {
+                            const finalMatch = matches[matches.length - 1]?.[0];
+                            if (!finalMatch) return 'TBD';
+                            const winnerName = typeof winner === 'object' ? winner.name : winner;
+                            const p1Name = typeof finalMatch.p1 === 'object' ? finalMatch.p1.name : finalMatch.p1;
+                            const p2Name = typeof finalMatch.p2 === 'object' ? finalMatch.p2.name : finalMatch.p2;
+                            return p1Name === winnerName ? p2Name : p1Name;
+                          })()}
+                        </div>
+                      </div>
+                      <div className="bg-gray-500/20 h-16 w-full"></div>
+                    </div>
+
+                    {/* 1st Place */}
+                    <div className="flex flex-col items-center">
+                      <div className="text-5xl mb-2 animate-bounce">🏆</div>
+                      <div className="bg-yellow-500/30 border border-yellow-400/50 rounded-t-xl px-8 py-6 min-w-[140px]">
+                        <div className="text-lg font-bold text-yellow-300">Champion</div>
+                        <div className="text-2xl font-bold text-white">{typeof winner === 'object' ? winner.name : winner}</div>
+                      </div>
+                      <div className="bg-yellow-500/20 h-24 w-full"></div>
+                    </div>
+
+                    {/* 3rd Place */}
+                    <div className="flex flex-col items-center">
+                      <div className="text-4xl mb-2">🥉</div>
+                      <div className="bg-orange-700/30 border border-orange-600/30 rounded-t-xl px-6 py-4 min-w-[120px]">
+                        <div className="text-lg font-bold text-orange-300">3rd Place</div>
+                        <div className="text-xl font-bold text-white">
+                          {thirdPlaceMatch?.winner ? (typeof thirdPlaceMatch.winner === 'object' ? thirdPlaceMatch.winner.name : thirdPlaceMatch.winner) : 'TBD'}
+                        </div>
+                      </div>
+                      <div className="bg-orange-700/20 h-12 w-full"></div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 mt-4">
+                    <button
+                      onClick={() => setShowTopShooters(!showTopShooters)}
+                      className="bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 px-6 py-3 rounded-xl font-bold transition-all border border-purple-500/30 hover:scale-105"
+                    >
+                      {showTopShooters ? 'Hide Top Shooters' : '🎯 Show Top Shooters'}
+                    </button>
+                    <button
+                      onClick={exitTournament}
+                      className="bg-white/10 hover:bg-white/20 text-white px-8 py-3 rounded-xl font-bold transition-all border border-white/20 hover:scale-105"
+                    >
+                      Back to Tournaments
+                    </button>
+                  </div>
+
+                  {/* Top Shooters Table */}
+                  {showTopShooters && (
+                    <TopShootersTable
+                      groups={groups}
+                      playoffPlayerStats={playoffPlayerStats}
+                      teams={teams}
+                    />
+                  )}
                 </div>
               ) : (
                 <Bracket
@@ -872,10 +993,15 @@ function App() {
                 }
                 team1Players={
                   currentMatchIndex.type === 'thirdPlace'
-                    ? (teams.find(t => t.name === thirdPlaceMatch.p1)?.players || [])
+                    ? (typeof thirdPlaceMatch.p1 === 'object' ? thirdPlaceMatch.p1.players : teams.find(t => t.name === thirdPlaceMatch.p1)?.players) || []
                     : currentMatchIndex.type === 'group'
                       ? (groups[currentMatchIndex.groupIndex].matches[currentMatchIndex.matchIndex].p1Players || [])
-                      : (teams.find(t => t.name === matches[currentMatchIndex.roundIndex][currentMatchIndex.matchIndex].p1)?.players || [])
+                      : (() => {
+                        const p1 = matches[currentMatchIndex.roundIndex][currentMatchIndex.matchIndex].p1;
+                        if (typeof p1 === 'object' && p1.players) return p1.players;
+                        const p1Name = typeof p1 === 'object' ? p1.name : p1;
+                        return teams.find(t => t.name === p1Name)?.players || [];
+                      })()
                 }
                 team2={
                   currentMatchIndex.type === 'thirdPlace'
@@ -886,10 +1012,15 @@ function App() {
                 }
                 team2Players={
                   currentMatchIndex.type === 'thirdPlace'
-                    ? (teams.find(t => t.name === thirdPlaceMatch.p2)?.players || [])
+                    ? (typeof thirdPlaceMatch.p2 === 'object' ? thirdPlaceMatch.p2.players : teams.find(t => t.name === thirdPlaceMatch.p2)?.players) || []
                     : currentMatchIndex.type === 'group'
                       ? (groups[currentMatchIndex.groupIndex].matches[currentMatchIndex.matchIndex].p2Players || [])
-                      : (teams.find(t => t.name === matches[currentMatchIndex.roundIndex][currentMatchIndex.matchIndex].p2)?.players || [])
+                      : (() => {
+                        const p2 = matches[currentMatchIndex.roundIndex][currentMatchIndex.matchIndex].p2;
+                        if (typeof p2 === 'object' && p2.players) return p2.players;
+                        const p2Name = typeof p2 === 'object' ? p2.name : p2;
+                        return teams.find(t => t.name === p2Name)?.players || [];
+                      })()
                 }
                 onGameEnd={handleGameEnd}
                 initialTime={
