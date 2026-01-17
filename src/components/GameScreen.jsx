@@ -2,26 +2,58 @@ import React, { useState, useEffect } from 'react';
 import Cup from './Cup';
 import { motion } from 'framer-motion';
 
-const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
+const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600, tournamentId, matchId, initialGameState, onGameStateChange }) => {
     // True means cup is standing, False means cup is hit/removed
-    const [cups1, setCups1] = useState(Array(6).fill(true));
-    const [cups2, setCups2] = useState(Array(6).fill(true));
-    const [timeLeft, setTimeLeft] = useState(initialTime);
-    const [isActive, setIsActive] = useState(false);
-    const [suddenDeath, setSuddenDeath] = useState(false);
-    const [streak1, setStreak1] = useState(0); // Consecutive hits for team 1
-    const [streak2, setStreak2] = useState(0); // Consecutive hits for team 2
+    const [cups1, setCups1] = useState(initialGameState?.cups1 || Array(6).fill(true));
+    const [cups2, setCups2] = useState(initialGameState?.cups2 || Array(6).fill(true));
+    const [timeLeft, setTimeLeft] = useState(initialGameState?.timeLeft ?? initialTime);
+    const [isActive, setIsActive] = useState(initialGameState?.isActive || false);
+    const [suddenDeath, setSuddenDeath] = useState(initialGameState?.suddenDeath || false);
+    const [streak1, setStreak1] = useState(initialGameState?.streak1 || 0); // Consecutive hits for team 1
+    const [streak2, setStreak2] = useState(initialGameState?.streak2 || 0); // Consecutive hits for team 2
 
-    const [history, setHistory] = useState([]);
+    const [history, setHistory] = useState(initialGameState?.history || []);
 
     // Rearrange state
-    const [rearrangeUsed1, setRearrangeUsed1] = useState(false);
-    const [rearrangeUsed2, setRearrangeUsed2] = useState(false);
-    const [formation1, setFormation1] = useState(null); // { type: 'diamond'|'pyramid'|'line', slots: [] }
-    const [formation2, setFormation2] = useState(null);
+    const [rearrangeUsed1, setRearrangeUsed1] = useState(initialGameState?.rearrangeUsed1 || false);
+    const [rearrangeUsed2, setRearrangeUsed2] = useState(initialGameState?.rearrangeUsed2 || false);
+    const [formation1, setFormation1] = useState(initialGameState?.formation1 || null); // { type: 'diamond'|'pyramid'|'line', slots: [] }
+    const [formation2, setFormation2] = useState(initialGameState?.formation2 || null);
 
     // Game Summary State
     const [gameResult, setGameResult] = useState(null);
+    const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+    // Handle back button - if game started, show confirmation
+    const handleBack = () => {
+        if (isActive || history.length > 0) {
+            // Game has started - pause and show confirm
+            setIsActive(false);
+            setShowExitConfirm(true);
+        } else {
+            // Game not started - just return
+            onGameEnd(null);
+        }
+    };
+
+    const confirmExit = () => {
+        setShowExitConfirm(false);
+        onGameEnd(null);
+    };
+
+    const cancelExit = () => {
+        setShowExitConfirm(false);
+        // Don't auto-resume, let user press Play
+    };
+
+    // Report state changes to parent for persistence
+    useEffect(() => {
+        if (!onGameStateChange) return;
+        onGameStateChange({
+            cups1, cups2, timeLeft, isActive, suddenDeath, streak1, streak2,
+            history, rearrangeUsed1, rearrangeUsed2, formation1, formation2
+        });
+    }, [cups1, cups2, timeLeft, isActive, suddenDeath, streak1, streak2, history, rearrangeUsed1, rearrangeUsed2, formation1, formation2]);
 
     useEffect(() => {
         let interval = null;
@@ -42,6 +74,41 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
         }
         return () => clearInterval(interval);
     }, [isActive, timeLeft, suddenDeath, cups1, cups2, gameResult]);
+
+    const logEvent = async (eventType, details) => {
+        if (!tournamentId || !matchId) return;
+
+        const elapsedTime = initialTime - timeLeft;
+        const mins = Math.floor(elapsedTime / 60);
+        const secs = elapsedTime % 60;
+        const timeStr = `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+        // Cups After
+        const remaining1 = cups1.filter(c => c).length;
+        const remaining2 = cups2.filter(c => c).length;
+        // Adjust if this is called *before* state update or *after*?
+        // Let's pass the specific values in details if needed, otherwise use current state (which might be stale if called immediately)
+        // Better to pass logic values.
+
+        try {
+            await fetch('/api/events', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tournament_id: tournamentId,
+                    match_id: matchId,
+                    hit_number: history.length + 1,
+                    game_time_str: timeStr,
+                    game_time_sec: elapsedTime,
+                    phase: suddenDeath ? 'Overtime' : 'Regulation',
+                    event_type: eventType,
+                    ...details
+                })
+            });
+        } catch (err) {
+            console.error("Failed to log event:", err);
+        }
+    };
 
     const addToHistory = () => {
         setHistory(prev => [...prev, {
@@ -92,6 +159,18 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
             if (wasStanding && !newCups[index]) {
                 setStreak2(prev => prev + 1);
                 setStreak1(0);
+
+                // Log Event (Team 2 hit Team 1's cup)
+                const r1 = newCups.filter(c => c).length;
+                const r2 = cups2.filter(c => c).length;
+                logEvent('Hit', {
+                    team_name: team2,
+                    player_name: team2, // Generic for now
+                    cup_hit: `Cup ${index + 1}`,
+                    score_after: `${(6 - r2)}-${(6 - r1)}`, // Hits: Team2 - Team1 (simplified)
+                    cups_left: `${r2}-${r1}`, // Left: Team2 - Team1
+                    notes: `Team 2 hit Cup ${index + 1}`
+                });
             }
 
             if (suddenDeath && !newCups[index]) {
@@ -110,6 +189,18 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
             if (wasStanding && !newCups[index]) {
                 setStreak1(prev => prev + 1);
                 setStreak2(0);
+
+                // Log Event (Team 1 hit Team 2's cup)
+                const r1 = cups1.filter(c => c).length;
+                const r2 = newCups.filter(c => c).length;
+                logEvent('Hit', {
+                    team_name: team1,
+                    player_name: team1,
+                    cup_hit: `Cup ${index + 1}`,
+                    score_after: `${(6 - r2)}-${(6 - r1)}`, // Hits: Team1 - Team2 (This direction logic might want to be consistent: P1-P2. Let's stick effectively to "ActiveTeam - Opponent" or "Team1 - Team2". Requested "Score After(A-B)" usually means Team A vs Team B. Let's assume P1-P2.)
+                    cups_left: `${r1}-${r2}`, // P1 - P2
+                    notes: `Team 1 hit Cup ${index + 1}`
+                });
             }
 
             if (suddenDeath && !newCups[index]) {
@@ -192,9 +283,23 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
         if (team === 1) {
             setRearrangeUsed1(true);
             setFormation2({ type, slots: activeIndices });
+            logEvent('Formation Change', {
+                team_name: team1,
+                notes: `${team1} chose ${type}`,
+                cup_hit: '',
+                score_after: '', // Keep previous? Or empty.
+                cups_left: `${cups1.filter(c => c).length}-${cups2.filter(c => c).length}`
+            });
         } else {
             setRearrangeUsed2(true);
             setFormation1({ type, slots: activeIndices });
+            logEvent('Formation Change', {
+                team_name: team2,
+                notes: `${team2} chose ${type}`,
+                cup_hit: '',
+                score_after: '',
+                cups_left: `${cups1.filter(c => c).length}-${cups2.filter(c => c).length}`
+            });
         }
     };
 
@@ -461,7 +566,41 @@ const GameScreen = ({ team1, team2, onGameEnd, initialTime = 600 }) => {
 
     return (
         <div className="flex flex-col items-center w-full max-w-5xl animate-fade-in relative">
+            {/* Back Button */}
+            <button
+                onClick={handleBack}
+                className="self-start mb-4 text-sm text-white/50 hover:text-white transition-colors"
+            >
+                ← Back to Matches
+            </button>
+
             {renderSummary()}
+
+            {/* Exit Confirmation Modal */}
+            {showExitConfirm && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+                    <div className="bg-gray-900 p-8 rounded-2xl border border-white/10 max-w-md text-center">
+                        <h3 className="text-2xl font-bold text-white mb-4">Exit Game?</h3>
+                        <p className="text-white/70 mb-6">
+                            The game is in progress. Are you sure you want to exit? Your progress will NOT be saved.
+                        </p>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={cancelExit}
+                                className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-semibold transition-all"
+                            >
+                                Continue Playing
+                            </button>
+                            <button
+                                onClick={confirmExit}
+                                className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-semibold transition-all"
+                            >
+                                Exit Game
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className={`text-6xl font-mono font-bold mb-12 px-8 py-4 rounded-2xl border backdrop-blur-md transition-all ${suddenDeath ? 'text-red-500 border-red-500/50 bg-red-900/20 animate-pulse' : 'text-white border-white/10 bg-black/40 shadow-[0_0_30px_rgba(168,85,247,0.2)]'}`}>
                 {suddenDeath ? 'SUDDEN DEATH' : formatTime(timeLeft)}

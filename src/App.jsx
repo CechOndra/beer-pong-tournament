@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import TeamInput from './components/TeamInput';
 import Bracket from './components/Bracket';
@@ -8,16 +8,181 @@ import GroupStage from './components/GroupStage';
 import { AnimatePresence, motion } from 'framer-motion';
 
 function App() {
-  const [view, setView] = useState('input'); // input, setup, groups, bracket, game
+  const [view, setView] = useState('tournaments'); // tournaments, input, setup, groups, bracket, game
+  const [allTournaments, setAllTournaments] = useState([]);
   const [teams, setTeams] = useState([]);
   const [matches, setMatches] = useState([]);
   const [groups, setGroups] = useState([]); // [{ name: 'A', teams: [], matches: [], standings: [] }]
   const [tournamentConfig, setTournamentConfig] = useState(null);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(null); // { roundIndex, matchIndex } or { groupIndex, matchIndex } or { type: 'thirdPlace' }
+  const [tournamentId, setTournamentId] = useState(null);
+  const [currentMatchId, setCurrentMatchId] = useState(null);
   const [winner, setWinner] = useState(null);
   const [thirdPlaceMatch, setThirdPlaceMatch] = useState(null); // { p1, p2, winner }
   const [playoffGameTime, setPlayoffGameTime] = useState(600); // Seconds
   const [tempPlayoffTime, setTempPlayoffTime] = useState(10); // Minutes (for UI)
+  const [isLoading, setIsLoading] = useState(true);
+  const [gameState, setGameState] = useState(null); // { cups1, cups2, timeLeft, streak1, streak2, etc. }
+  const [activeGroupTab, setActiveGroupTab] = useState(0); // Track which group tab is active
+
+  // --- State Restoration on Load ---
+  useEffect(() => {
+    const loadTournamentState = async () => {
+      try {
+        // Fetch all tournaments for the list
+        const allRes = await fetch('/api/tournaments');
+        const allData = await allRes.json();
+        setAllTournaments(allData.tournaments || []);
+
+        // Check if we have a saved tournament ID in sessionStorage
+        const savedTournamentId = sessionStorage.getItem('currentTournamentId');
+
+        if (savedTournamentId) {
+          // Load the specific tournament we were working on
+          const stateRes = await fetch(`/api/tournaments/${savedTournamentId}/state`);
+          const stateData = await stateRes.json();
+
+          if (stateData.tournament && stateData.tournament.app_state) {
+            const savedState = JSON.parse(stateData.tournament.app_state);
+
+            // Don't auto-restore if tournament is finished (has a winner)
+            if (savedState.winner) {
+              sessionStorage.removeItem('currentTournamentId');
+              setView('tournaments');
+            } else {
+              // Don't restore 'game' view if match data is missing
+              if (savedState.view === 'game' && !savedState.currentMatchIndex) {
+                console.warn('Invalid game state detected, resetting to groups/bracket');
+                const fallbackView = savedState.groups?.length > 0 ? 'groups' :
+                  savedState.matches?.length > 0 ? 'bracket' : 'input';
+                savedState.view = fallbackView;
+              }
+
+              // Restore all state
+              setTournamentId(parseInt(savedTournamentId));
+              setView(savedState.view || 'input');
+              setTeams(savedState.teams || []);
+              setMatches(savedState.matches || []);
+              setGroups(savedState.groups || []);
+              setTournamentConfig(savedState.tournamentConfig || null);
+              setWinner(savedState.winner || null);
+              setThirdPlaceMatch(savedState.thirdPlaceMatch || null);
+              setPlayoffGameTime(savedState.playoffGameTime || 600);
+              setTempPlayoffTime(savedState.tempPlayoffTime || 10);
+              setCurrentMatchIndex(savedState.currentMatchIndex || null);
+              setCurrentMatchId(savedState.currentMatchId || null);
+              setGameState(savedState.gameState || null);
+            }
+          } else {
+            sessionStorage.removeItem('currentTournamentId');
+            setView('tournaments');
+          }
+        } else {
+          // No saved session, show tournament list
+          setView('tournaments');
+        }
+      } catch (err) {
+        console.error('Failed to restore state:', err);
+        sessionStorage.removeItem('currentTournamentId');
+        setView('tournaments');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadTournamentState();
+  }, []);
+
+  // --- Load Tournament by ID ---
+  const loadTournamentById = async (id) => {
+    setIsLoading(true);
+    try {
+      const stateRes = await fetch(`/api/tournaments/${id}/state`);
+      const stateData = await stateRes.json();
+
+      if (stateData.tournament && stateData.tournament.app_state) {
+        const savedState = JSON.parse(stateData.tournament.app_state);
+
+        setTournamentId(id);
+        sessionStorage.setItem('currentTournamentId', id.toString());
+        setView(savedState.view || 'groups');
+        setTeams(savedState.teams || []);
+        setMatches(savedState.matches || []);
+        setGroups(savedState.groups || []);
+        setTournamentConfig(savedState.tournamentConfig || null);
+        setWinner(savedState.winner || null);
+        setThirdPlaceMatch(savedState.thirdPlaceMatch || null);
+        setPlayoffGameTime(savedState.playoffGameTime || 600);
+        setTempPlayoffTime(savedState.tempPlayoffTime || 10);
+        setCurrentMatchIndex(savedState.currentMatchIndex || null);
+        setCurrentMatchId(savedState.currentMatchId || null);
+        setGameState(savedState.gameState || null);
+      } else {
+        // Tournament exists but no app_state yet, go to input
+        setTournamentId(id);
+        sessionStorage.setItem('currentTournamentId', id.toString());
+        setView('input');
+      }
+    } catch (err) {
+      console.error('Failed to load tournament:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- Fetch All Tournaments ---
+  const fetchAllTournaments = async () => {
+    try {
+      const res = await fetch('/api/tournaments');
+      const data = await res.json();
+      setAllTournaments(data.tournaments || []);
+    } catch (err) {
+      console.error('Failed to fetch tournaments:', err);
+    }
+  };
+
+  // --- Exit Tournament (go back to tournament list) ---
+  const exitTournament = () => {
+    sessionStorage.removeItem('currentTournamentId');
+    setTournamentId(null);
+    setView('tournaments');
+    setTeams([]);
+    setMatches([]);
+    setGroups([]);
+    setTournamentConfig(null);
+    setWinner(null);
+    setThirdPlaceMatch(null);
+    setCurrentMatchIndex(null);
+    setCurrentMatchId(null);
+    setGameState(null);
+    fetchAllTournaments();
+  };
+
+  // --- Auto-Save State on Changes ---
+  useEffect(() => {
+    if (!tournamentId || isLoading) return;
+
+    const appState = {
+      view,
+      teams,
+      matches,
+      groups,
+      tournamentConfig,
+      winner,
+      thirdPlaceMatch,
+      playoffGameTime,
+      tempPlayoffTime,
+      currentMatchIndex,
+      currentMatchId,
+      gameState
+    };
+
+    fetch(`/api/tournaments/${tournamentId}/state`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appState })
+    }).catch(err => console.error('Failed to save state:', err));
+  }, [view, teams, matches, groups, tournamentConfig, winner, thirdPlaceMatch, playoffGameTime, tempPlayoffTime, currentMatchIndex, currentMatchId, gameState, tournamentId, isLoading]);
 
   // --- Navigation & Setup ---
 
@@ -26,14 +191,36 @@ function App() {
     setView('setup');
   };
 
-  const startTournament = ({ mode, config }) => {
-    setTournamentConfig({ mode, ...config });
+  const startTournament = async ({ mode, tournamentName, config }) => {
+    try {
+      const res = await fetch('/api/tournaments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: tournamentName, config: { mode, ...config } })
+      });
+      const data = await res.json();
+      setTournamentId(data.id);
+      sessionStorage.setItem('currentTournamentId', data.id.toString());
 
-    if (mode === 'groups' || mode === 'groups_only') {
-      generateGroups(teams, config.numGroups, config.advancingPerGroup);
-    } else {
-      setPlayoffGameTime(config.gameTime); // Set playoff time directly
-      generateBracket(teams);
+      // Save teams
+      await Promise.all(teams.map(team =>
+        fetch('/api/teams', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tournament_id: data.id, name: team, group_name: null })
+        })
+      ));
+
+      setTournamentConfig({ mode, ...config });
+
+      if (mode === 'groups' || mode === 'groups_only') {
+        generateGroups(teams, config.numGroups, config.advancingPerGroup);
+      } else {
+        setPlayoffGameTime(config.gameTime); // Set playoff time directly
+        generateBracket(teams);
+      }
+    } catch (err) {
+      console.error("Error starting tournament:", err);
     }
   };
 
@@ -96,9 +283,32 @@ function App() {
     setView('groups');
   };
 
-  const handleGroupMatchClick = (groupIndex, matchIndex) => {
-    setCurrentMatchIndex({ groupIndex, matchIndex, type: 'group' });
-    setView('game');
+  const handleGroupMatchClick = async (groupIndex, matchIndex) => {
+    const group = groups[groupIndex];
+    const match = group.matches[matchIndex];
+
+    try {
+      const res = await fetch('/api/matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tournament_id: tournamentId,
+          p1: match.p1,
+          p2: match.p2,
+          round_index: null,
+          group_id: group.name
+        })
+      });
+      const data = await res.json();
+      setCurrentMatchId(data.id);
+
+      setGameState(null); // Reset game state for new match
+      setCurrentMatchIndex({ groupIndex, matchIndex, type: 'group' });
+      setActiveGroupTab(groupIndex); // Remember which group we're in
+      setView('game');
+    } catch (err) {
+      console.error("Error creating match:", err);
+    }
   };
 
   const updateGroupStandings = (groupIndex, matchResult) => {
@@ -294,14 +504,55 @@ function App() {
     setView('bracket');
   };
 
-  const handleBracketMatchClick = (roundIndex, matchIndex) => {
-    setCurrentMatchIndex({ roundIndex, matchIndex, type: 'bracket' });
-    setView('game');
+  const handleBracketMatchClick = async (roundIndex, matchIndex) => {
+    const match = matches[roundIndex][matchIndex];
+    if (!match.p1 || !match.p2) return; // Don't start empty matches
+
+    try {
+      const res = await fetch('/api/matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tournament_id: tournamentId,
+          p1: match.p1,
+          p2: match.p2,
+          round_index: roundIndex,
+          group_id: null
+        })
+      });
+      const data = await res.json();
+      setCurrentMatchId(data.id);
+
+      setGameState(null); // Reset game state for new match
+      setCurrentMatchIndex({ roundIndex, matchIndex, type: 'bracket' });
+      setView('game');
+    } catch (err) {
+      console.error("Error creating match:", err);
+    }
   };
 
-  const handleThirdPlaceMatchClick = () => {
-    setCurrentMatchIndex({ type: 'thirdPlace' });
-    setView('game');
+  const handleThirdPlaceMatchClick = async () => {
+    try {
+      const res = await fetch('/api/matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tournament_id: tournamentId,
+          p1: thirdPlaceMatch.p1,
+          p2: thirdPlaceMatch.p2,
+          round_index: -1, // Special index for 3rd place?
+          group_id: '3rdPlace'
+        })
+      });
+      const data = await res.json();
+      setCurrentMatchId(data.id);
+
+      setGameState(null); // Reset game state for new match
+      setCurrentMatchIndex({ type: 'thirdPlace' });
+      setView('game');
+    } catch (err) {
+      console.error("Error creating match:", err);
+    }
   };
 
   const handleGameEnd = (result) => {
@@ -381,160 +632,232 @@ function App() {
 
   return (
     <Layout>
-      <AnimatePresence mode="wait">
-        {view === 'input' && (
-          <motion.div
-            key="input"
-            initial={{ opacity: 0, x: -50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 50 }}
-            className="w-full flex justify-center"
-          >
-            <TeamInput onStartTournament={handleTeamInputComplete} />
-          </motion.div>
-        )}
-
-        {view === 'setup' && (
-          <motion.div
-            key="setup"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.1 }}
-            className="w-full"
-          >
-            <TournamentSetup teams={teams} onStartTournament={startTournament} />
-          </motion.div>
-        )}
-
-        {view === 'groups' && (
-          <motion.div
-            key="groups"
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -50 }}
-            className="w-full"
-          >
-            <GroupStage
-              groups={groups}
-              onMatchClick={handleGroupMatchClick}
-              onAdvanceToPlayoffs={goToPlayoffSetup}
-              mode={tournamentConfig?.mode}
-            />
-          </motion.div>
-        )}
-
-        {view === 'playoffSetup' && (
-          <motion.div
-            key="playoffSetup"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.1 }}
-            className="w-full max-w-2xl mx-auto flex flex-col gap-8 animate-fade-in"
-          >
-            <h2 className="text-3xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
-              Playoff Configuration
-            </h2>
-            <div className="bg-white/5 p-6 rounded-2xl border border-white/10">
-              <label className="block text-lg font-semibold mb-4">
-                Playoff Game Duration
-              </label>
-              <div className="flex items-center gap-4">
-                <input
-                  type="range"
-                  min="1"
-                  max="20"
-                  value={tempPlayoffTime}
-                  onChange={(e) => setTempPlayoffTime(parseInt(e.target.value))}
-                  className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                />
-                <div className="min-w-[80px] text-center font-mono text-xl font-bold text-blue-400">
-                  {tempPlayoffTime} min
-                </div>
-              </div>
-              <p className="text-xs text-gray-400 mt-2">
-                Set the time limit for all playoff matches.
-              </p>
-            </div>
-            <button
-              onClick={advanceToBracket}
-              className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl font-bold text-xl shadow-lg hover:scale-[1.02] transition-transform"
+      {isLoading ? (
+        <div className="flex items-center justify-center h-96">
+          <div className="text-2xl text-white/50 animate-pulse">Loading...</div>
+        </div>
+      ) : (
+        <AnimatePresence mode="wait">
+          {view === 'tournaments' && (
+            <motion.div
+              key="tournaments"
+              initial={{ opacity: 0, y: -30 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 30 }}
+              className="w-full max-w-2xl mx-auto flex flex-col gap-6"
             >
-              Generate Bracket
-            </button>
-          </motion.div>
-        )}
+              <h2 className="text-3xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
+                🏆 Select Tournament
+              </h2>
 
-        {view === 'bracket' && (
-          <motion.div
-            key="bracket"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.1 }}
-            className="w-full"
-          >
-            {winner ? (
-              <div className="text-center flex flex-col items-center">
-                <h2 className="text-5xl md:text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 mb-8 animate-bounce drop-shadow-lg">
-                  🏆 {winner} Wins! 🏆
-                </h2>
-                <div className="text-2xl text-white/80 mb-12">The ultimate beer pong champions</div>
-                <button
-                  onClick={() => {
-                    setWinner(null);
-                    setMatches([]);
-                    setTeams([]);
-                    setGroups([]);
-                    setView('input');
-                  }}
-                  className="bg-white/10 hover:bg-white/20 text-white px-8 py-3 rounded-xl font-bold transition-all border border-white/20 hover:scale-105"
-                >
-                  Start New Tournament
-                </button>
-              </div>
-            ) : (
-              <Bracket
-                matches={matches}
-                onMatchClick={handleBracketMatchClick}
-                thirdPlaceMatch={thirdPlaceMatch}
-                onThirdPlaceMatchClick={handleThirdPlaceMatchClick}
+              <button
+                onClick={() => setView('input')}
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-400 hover:to-teal-400 text-white font-bold text-lg shadow-lg transition-all duration-300"
+              >
+                ➕ Create New Tournament
+              </button>
+
+              {allTournaments.length > 0 ? (
+                <div className="flex flex-col gap-3">
+                  {allTournaments.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => loadTournamentById(t.id)}
+                      className="w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-left transition-all duration-200"
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <span className="text-lg font-semibold text-white">
+                            {t.name || `Tournament #${t.id}`}
+                          </span>
+                          <span className="ml-3 text-sm text-white/50">
+                            {t.config?.mode || 'Unknown Mode'}
+                          </span>
+                        </div>
+                        <span className="text-xs text-white/40">
+                          {new Date(t.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-center text-white/50">No tournaments yet. Create one!</p>
+              )}
+            </motion.div>
+          )}
+
+          {view === 'input' && (
+            <motion.div
+              key="input"
+              initial={{ opacity: 0, x: -50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 50 }}
+              className="w-full flex flex-col items-center gap-4"
+            >
+              <button
+                onClick={() => setView('tournaments')}
+                className="text-sm text-white/50 hover:text-white transition-colors"
+              >
+                ← Back to Tournaments
+              </button>
+              <TeamInput onStartTournament={handleTeamInputComplete} />
+            </motion.div>
+          )}
+
+          {view === 'setup' && (
+            <motion.div
+              key="setup"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.1 }}
+              className="w-full"
+            >
+              <TournamentSetup teams={teams} onStartTournament={startTournament} />
+            </motion.div>
+          )}
+
+          {view === 'groups' && (
+            <motion.div
+              key="groups"
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -50 }}
+              className="w-full"
+            >
+              <button
+                onClick={exitTournament}
+                className="mb-4 text-sm text-white/50 hover:text-white transition-colors"
+              >
+                ← Exit Tournament
+              </button>
+              <GroupStage
+                groups={groups}
+                onMatchClick={handleGroupMatchClick}
+                onAdvanceToPlayoffs={goToPlayoffSetup}
+                mode={tournamentConfig?.mode}
+                initialActiveTab={activeGroupTab}
               />
-            )}
-          </motion.div>
-        )}
+            </motion.div>
+          )}
 
-        {view === 'game' && currentMatchIndex && (
-          <motion.div
-            key="game"
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -50 }}
-            className="w-full flex justify-center"
-          >
-            <GameScreen
-              team1={
-                currentMatchIndex.type === 'thirdPlace'
-                  ? thirdPlaceMatch.p1
-                  : currentMatchIndex.type === 'group'
-                    ? groups[currentMatchIndex.groupIndex].matches[currentMatchIndex.matchIndex].p1
-                    : matches[currentMatchIndex.roundIndex][currentMatchIndex.matchIndex].p1
-              }
-              team2={
-                currentMatchIndex.type === 'thirdPlace'
-                  ? thirdPlaceMatch.p2
-                  : currentMatchIndex.type === 'group'
-                    ? groups[currentMatchIndex.groupIndex].matches[currentMatchIndex.matchIndex].p2
-                    : matches[currentMatchIndex.roundIndex][currentMatchIndex.matchIndex].p2
-              }
-              onGameEnd={handleGameEnd}
-              initialTime={
-                currentMatchIndex.type === 'group'
-                  ? tournamentConfig?.gameTime || 600
-                  : playoffGameTime
-              }
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+          {view === 'playoffSetup' && (
+            <motion.div
+              key="playoffSetup"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.1 }}
+              className="w-full max-w-2xl mx-auto flex flex-col gap-8 animate-fade-in"
+            >
+              <h2 className="text-3xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
+                Playoff Configuration
+              </h2>
+              <div className="bg-white/5 p-6 rounded-2xl border border-white/10">
+                <label className="block text-lg font-semibold mb-4">
+                  Playoff Game Duration
+                </label>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="range"
+                    min="1"
+                    max="20"
+                    value={tempPlayoffTime}
+                    onChange={(e) => setTempPlayoffTime(parseInt(e.target.value))}
+                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                  <div className="min-w-[80px] text-center font-mono text-xl font-bold text-blue-400">
+                    {tempPlayoffTime} min
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  Set the time limit for all playoff matches.
+                </p>
+              </div>
+              <button
+                onClick={advanceToBracket}
+                className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl font-bold text-xl shadow-lg hover:scale-[1.02] transition-transform"
+              >
+                Generate Bracket
+              </button>
+            </motion.div>
+          )}
+
+          {view === 'bracket' && (
+            <motion.div
+              key="bracket"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.1 }}
+              className="w-full"
+            >
+              <button
+                onClick={exitTournament}
+                className="mb-4 text-sm text-white/50 hover:text-white transition-colors"
+              >
+                ← Exit Tournament
+              </button>
+              {winner ? (
+                <div className="text-center flex flex-col items-center">
+                  <h2 className="text-5xl md:text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 mb-8 animate-bounce drop-shadow-lg">
+                    🏆 {winner} Wins! 🏆
+                  </h2>
+                  <div className="text-2xl text-white/80 mb-12">The ultimate beer pong champions</div>
+                  <button
+                    onClick={exitTournament}
+                    className="bg-white/10 hover:bg-white/20 text-white px-8 py-3 rounded-xl font-bold transition-all border border-white/20 hover:scale-105"
+                  >
+                    Back to Tournaments
+                  </button>
+                </div>
+              ) : (
+                <Bracket
+                  matches={matches}
+                  onMatchClick={handleBracketMatchClick}
+                  thirdPlaceMatch={thirdPlaceMatch}
+                  onThirdPlaceMatchClick={handleThirdPlaceMatchClick}
+                />
+              )}
+            </motion.div>
+          )}
+
+          {view === 'game' && currentMatchIndex && (
+            <motion.div
+              key="game"
+              initial={{ opacity: 0, y: 50 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -50 }}
+              className="w-full flex justify-center"
+            >
+              <GameScreen
+                team1={
+                  currentMatchIndex.type === 'thirdPlace'
+                    ? thirdPlaceMatch.p1
+                    : currentMatchIndex.type === 'group'
+                      ? groups[currentMatchIndex.groupIndex].matches[currentMatchIndex.matchIndex].p1
+                      : matches[currentMatchIndex.roundIndex][currentMatchIndex.matchIndex].p1
+                }
+                team2={
+                  currentMatchIndex.type === 'thirdPlace'
+                    ? thirdPlaceMatch.p2
+                    : currentMatchIndex.type === 'group'
+                      ? groups[currentMatchIndex.groupIndex].matches[currentMatchIndex.matchIndex].p2
+                      : matches[currentMatchIndex.roundIndex][currentMatchIndex.matchIndex].p2
+                }
+                onGameEnd={handleGameEnd}
+                initialTime={
+                  currentMatchIndex.type === 'group'
+                    ? tournamentConfig?.gameTime || 600
+                    : playoffGameTime
+                }
+                tournamentId={tournamentId}
+                matchId={currentMatchId}
+                initialGameState={gameState}
+                onGameStateChange={setGameState}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
     </Layout>
   );
 }

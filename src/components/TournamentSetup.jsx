@@ -5,6 +5,7 @@ const TournamentSetup = ({ teams, onStartTournament }) => {
     const [mode, setMode] = useState('playoffs'); // 'playoffs' or 'groups'
     const [numGroups, setNumGroups] = useState(2);
     const [advancingPerGroup, setAdvancingPerGroup] = useState(2);
+    const [tournamentName, setTournamentName] = useState(''); // Optional name
 
     const [gameTime, setGameTime] = useState(10); // Minutes
 
@@ -28,6 +29,7 @@ const TournamentSetup = ({ teams, onStartTournament }) => {
     const handleStart = () => {
         onStartTournament({
             mode,
+            tournamentName: tournamentName.trim() || null,
             config: {
                 ...((mode === 'groups' || mode === 'groups_only') ? { numGroups: mode === 'groups_only' ? 1 : numGroups, advancingPerGroup } : {}),
                 gameTime: gameTime * 60 // Convert to seconds
@@ -45,6 +47,18 @@ const TournamentSetup = ({ teams, onStartTournament }) => {
             <h2 className="text-3xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
                 Tournament Setup
             </h2>
+
+            {/* Optional Tournament Name */}
+            <div className="bg-white/5 p-6 rounded-2xl border border-white/10">
+                <label className="block text-lg font-semibold mb-4">Tournament Name (Optional)</label>
+                <input
+                    type="text"
+                    value={tournamentName}
+                    onChange={(e) => setTournamentName(e.target.value)}
+                    placeholder="e.g., Friday Night Pong"
+                    className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-blue-500 transition-colors"
+                />
+            </div>
 
             <div className="bg-white/5 p-6 rounded-2xl border border-white/10">
                 <label className="block text-lg font-semibold mb-4">Tournament Format</label>

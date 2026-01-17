@@ -1,10 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
-const GroupStage = ({ groups, onMatchClick, onAdvanceToPlayoffs, mode }) => {
-    const [activeTab, setActiveTab] = useState(0);
+const GroupStage = ({ groups, onMatchClick, onAdvanceToPlayoffs, mode, initialActiveTab = 0 }) => {
+    const [activeTab, setActiveTab] = useState(initialActiveTab);
     const [activeTooltip, setActiveTooltip] = useState(null);
     const [activeHeaderTooltip, setActiveHeaderTooltip] = useState(null);
+
+    // Sync activeTab with initialActiveTab prop when it changes
+    useEffect(() => {
+        setActiveTab(initialActiveTab);
+    }, [initialActiveTab]);
 
     const isGroupComplete = (group) => {
         return group.matches.every(m => m.winner);
