@@ -82,6 +82,34 @@ const GameScreen = ({ team1: team1Prop, team1Players = [], team2: team2Prop, tea
         return () => clearInterval(interval);
     }, [isActive, timeLeft, suddenDeath, cups1, cups2, gameResult]);
 
+    // Sound Effects for Hot Streak
+    const playFireSound = () => {
+        try {
+            const audio = new Audio('/sounds/fire.mp3');
+            audio.volume = 0.6;
+            audio.play().catch(e => console.warn("Audio play failed:", e));
+        } catch (e) {
+            console.error("Error creating Audio:", e);
+        }
+    };
+
+    const playVoiceLine = () => {
+        try {
+            const audio = new Audio('/sounds/on_fire_voice.m4a');
+            audio.volume = 1.0;
+            audio.play().catch(e => console.warn("Voice audio play failed:", e));
+        } catch (e) {
+            console.error("Error creating Voice Audio:", e);
+        }
+    };
+
+    useEffect(() => {
+        if (streak1 === 3 || streak2 === 3) {
+            playVoiceLine();
+            playFireSound();
+        }
+    }, [streak1, streak2]);
+
     const logEvent = async (eventType, details) => {
         if (!tournamentId || !matchId) return;
 
